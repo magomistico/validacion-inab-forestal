@@ -298,7 +298,8 @@
                                          [:userId {:optional true} Int]]]]
    :plots/reset-plot-lock [:map
                            [:params [:map
-                                     [:plotId Int]]]
+                                     [:plotId Int]
+                                     [:projectId {:optional true} Int]]]
                            [:session [:map
                                       [:userId {:optional true} Int]]]]})
  
@@ -332,7 +333,7 @@
    [:content-length     [:maybe Int]]
    [:session/key        [:maybe :any]]
    [:content-type       [:maybe :any]]
-   [:character-encoding [:maybe [:enum "UTF-8" "iso-8859-1"]]]   
+   [:character-encoding [:maybe [:enum "UTF-8" "utf-8" "iso-8859-1"]]]   
    [:query-string       [:maybe :string]]
    [:body               [:any]]
    [:scheme             [:enum :http :https]]

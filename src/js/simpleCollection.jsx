@@ -497,16 +497,21 @@ class SimpleCollection extends React.Component {
   };
 
   getSelectedSampleIds = (questionId) => {
-    const { answered } = this.state.currentProject.surveyQuestions[questionId];
+    const q = this.state.currentProject.surveyQuestions[questionId];
+    const answeredIds = new Set((q?.answered || []).map((a) => a.sampleId));
     const allFeatures = mercator.getAllFeatures(this.state.mapConfig, "currentSamples") || [];
+    const allFeatureIds = allFeatures.map((sf) => sf.get("sampleId"));
+    const visibleIds = (q?.visible || []).length > 0 ? q.visible.map((v) => v.id) : allFeatureIds;
     const selectedSamples = mercator.getSelectedSamples(this.state.mapConfig);
-    const selectedFeatures = selectedSamples ? selectedSamples.getArray() : [];
-    return (
-      (selectedFeatures.length === 0 && answered.length === 0) ||
-      lengthObject(this.state.userSamples) === 1
-        ? allFeatures
-        : selectedFeatures
-    ).map((sf) => sf.get("sampleId"));
+    const selectedIds = (selectedSamples ? selectedSamples.getArray() : [])
+      .map((sf) => sf.get("sampleId"))
+      .filter((id) => visibleIds.includes(id));
+
+    if (selectedIds.length > 0) return selectedIds;
+    if (visibleIds.length === 1 || lengthObject(this.state.userSamples) === 1) return visibleIds;
+    if (answeredIds.size === 0) return visibleIds;
+    const unansweredIds = visibleIds.filter((id) => !answeredIds.has(id));
+    return unansweredIds.length > 0 ? unansweredIds : visibleIds;
   };
 
   checkSelection = (sampleIds, questionId) => {

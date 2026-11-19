@@ -194,6 +194,8 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
      state.selectedQuestionId,
     ]);
 
+  const lockIntervalRef = useRef(null);
+
   // UPDATE MAP WHEN STATE CHANGES — Auto launch geodash
   useEffect(() => {
     if (!state.currentPlot?.id) return;
@@ -204,14 +206,30 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
       showGeoDash();
     }
 
-    if (state.storedInterval) clearInterval(state.storedInterval);
-    if (state.currentProject?.type === "regular") {
-      const id = setInterval(resetPlotLock, 60 * 1000);
-      setState((s) => ({ ...s, storedInterval: id }));
-    }
-
     updateMapImagery();
   }, [state.currentPlot?.id, state.showBoundary, state.currentProject?.hasGeoDash, state.currentProject?.projectOptions?.autoLaunchGeoDash, state.currentProject?.type]);
+
+  // KEEP PLOT LOCK ALIVE — cleaned up on plot change / unmount
+  useEffect(() => {
+    if (lockIntervalRef.current) {
+      clearInterval(lockIntervalRef.current);
+      lockIntervalRef.current = null;
+    }
+    const plotIdToLock = state.currentPlot?.id;
+    const projIdToLock = state.currentProject?.id ?? Number(projectId);
+    if (!plotIdToLock || !projIdToLock || state.currentProject?.type !== "regular") return;
+
+    lockIntervalRef.current = setInterval(() => {
+      resetPlotLock(plotIdToLock, projIdToLock);
+    }, 60 * 1000);
+
+    return () => {
+      if (lockIntervalRef.current) {
+        clearInterval(lockIntervalRef.current);
+        lockIntervalRef.current = null;
+      }
+    };
+  }, [state.currentPlot?.id, state.currentProject?.id, state.currentProject?.type, projectId]);
 
   // GET PLOT DATA WHEN NEEDED - When getNewPlot changes to true, request plot data
   useEffect(() => {
@@ -508,22 +526,27 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
     }));
   };
 
-  const resetPlotLock = () => {
+  const resetPlotLock = (plotIdToLock = state.currentPlot?.id, projIdToLock = state.currentProject?.id ?? Number(projectId)) => {
+    if (!plotIdToLock || !projIdToLock || document.visibilityState === "hidden") return;
     fetch("/reset-plot-lock", {
-      method: "POST",	
-      headers: {	
-        Accept: "application/json",	
-        "Content-Type": "application/json",	
-      },	
-      body: JSON.stringify({	
-        plotId: state.currentPlot.id,	
-        projectId: state.currentProject.id,
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        plotId: plotIdToLock,
+        projectId: projIdToLock,
       }),
-    }).then((response) => {	
-      if (!response.ok) {        
-        setState (s => ({...s, modal: {alert: {alertType: "Plot Lock Error", alertMessage: "Error maintaining plot lock. Your work may get overwritten. See console for details."}}}));	
-      }	
-    });	
+    })
+      .then((response) => {
+        if (!response.ok) {
+          console.warn("Could not refresh plot lock (status " + response.status + ")");
+        }
+      })
+      .catch((err) => {
+        console.warn("Network error refreshing plot lock:", err);
+      });
   };
   
   const setImageryAttribution = (attributionSuffix) =>
@@ -580,10 +603,12 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
       currentProject: { surveyQuestions },
       userSamples,
     } = state;
-    const { parentQuestionId, parentAnswerIds } = surveyQuestions[currentQuestionId];
+    const question = surveyQuestions?.[currentQuestionId];
+    if (!question) return [];
+    const { parentQuestionId, parentAnswerIds = [] } = question;
 
-    if (parentQuestionId === -1) {
-      return state.currentPlot?.samples;
+    if (parentQuestionId === -1 || parentQuestionId === "-1") {
+      return state.currentPlot?.samples || [];
     } else {
       return calcVisibleSamples(parentQuestionId)?.filter((sample) => {
         const sampleAnswerId = _.get(userSamples, [sample.id, parentQuestionId, "answerId"]);

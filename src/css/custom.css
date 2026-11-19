@@ -722,7 +722,7 @@ h2.header {
 }
 #project-design.bg-lightgray:hover,
 #account-page.bg-lightgray:hover {
-    background-color: var(--lightgray);
+    background-color: #111813;
 }
 #project-design h3 {
     margin-top: 1rem;
@@ -1577,6 +1577,10 @@ html, body {
 .card-header, .modal-header {
   background-color: rgba(114, 184, 121, 0.14) !important;
   border-bottom: 1px solid rgba(114, 184, 121, 0.22) !important;
+  color: #ffffff !important;
+}
+
+.modal-title {
   color: #ffffff !important;
 }
 

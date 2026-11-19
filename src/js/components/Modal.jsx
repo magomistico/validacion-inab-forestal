@@ -35,15 +35,30 @@ export default function Modal({
       >
         <div className="modal-content" id="confirmModalContent">
           <div className={danger ? "alert-header" : "modal-header"}>
-            <h5 className="modal-title" id="confirmModalTitle">
+            <h5
+              className="modal-title"
+              id="confirmModalTitle"
+              style={{ color: "#ffffff", fontWeight: 600 }}
+            >
               {title}
             </h5>
-            <button aria-label="Close" className="close" onClick={onClose} type="button">
+            <button
+              aria-label="Close"
+              className="close"
+              onClick={onClose}
+              style={{ color: "#e4e4e7", textShadow: "none", opacity: 0.9 }}
+              type="button"
+            >
               &times;
             </button>
           </div>
-          <div className="modal-body"p style={{"white-space": "pre-line"}}>{children}</div>
-          <div className="modal-footer">
+          <div className="modal-body" style={{ whiteSpace: "pre-line", color: "#e4e4e7" }}>
+            {children}
+          </div>
+          <div
+            className="modal-footer"
+            style={{ borderTop: "1px solid rgba(114, 184, 121, 0.2)" }}
+          >
             {closeText !== '' &&
             <button className="btn btn-secondary btn-sm" onClick={onClose} type="button">
               {closeText}
