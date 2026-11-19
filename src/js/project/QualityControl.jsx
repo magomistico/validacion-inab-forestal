@@ -46,8 +46,9 @@ export default class QualityControl extends React.Component {
             <div className="col-6">
               <div
                 style={{
-                  background: "white",
-                  border: "1px solid #ced4da",
+                  background: "#070b08",
+                  color: "#f4f4f5",
+                  border: "1px solid rgba(255, 255, 255, 0.16)",
                   borderRadius: ".25rem",
                   fontSize: ".875rem",
                   overflow: "hidden",

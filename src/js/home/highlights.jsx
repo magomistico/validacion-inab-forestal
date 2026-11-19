@@ -226,11 +226,11 @@ export default function Highlights ({userId, userRole}) {
     return (
       <div style={{
         width: "100%",
-        background: "#ffffff",
+        background: "#0c120e",
         borderRadius: "12px",
-        border: "1px solid #d0ded8",
+        border: "1px solid rgba(114, 184, 121, 0.28)",
         padding: "28px 32px",
-        boxShadow: "0 2px 8px rgba(31, 112, 103, 0.06)",
+        boxShadow: "0 6px 20px rgba(0, 0, 0, 0.45)",
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
@@ -246,8 +246,9 @@ export default function Highlights ({userId, userRole}) {
             fontWeight: "700",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            color: "#1F7067",
-            background: "#E9F1F0",
+            color: "#9ed999",
+            background: "rgba(114, 184, 121, 0.16)",
+            border: "1px solid rgba(114, 184, 121, 0.3)",
             padding: "4px 10px",
             borderRadius: "4px",
             marginBottom: "12px"
@@ -257,7 +258,7 @@ export default function Highlights ({userId, userRole}) {
           <h3 style={{
             fontSize: "19px",
             fontWeight: "700",
-            color: "#1d2939",
+            color: "#ffffff",
             margin: "0 0 10px 0"
           }}>
             Adaptación Institucional basada en Collect Earth Online (CEO)
@@ -265,7 +266,7 @@ export default function Highlights ({userId, userRole}) {
           <p style={{
             fontSize: "14px",
             lineHeight: "1.65",
-            color: "#475467",
+            color: "#d4d4d8",
             margin: "0 0 16px 0"
           }}>
             Esta plataforma institucional del <strong>Instituto Nacional de Bosques (INAB · SIG)</strong> ha sido adaptada y personalizada a partir del software de código abierto <strong>Collect Earth Online (CEO)</strong>, desarrollado originalmente por <strong>Open Foris (FAO)</strong> y <strong>SERVIR (NASA / USAID)</strong> para la interpretación visual de imágenes satelitales y validación geoespacial.
@@ -281,16 +282,16 @@ export default function Highlights ({userId, userRole}) {
                 gap: "8px",
                 fontSize: "13px",
                 fontWeight: "600",
-                color: "#1F7067",
+                color: "#9ed999",
                 textDecoration: "none",
-                background: "#f0f7f5",
+                background: "rgba(114, 184, 121, 0.14)",
                 padding: "8px 14px",
                 borderRadius: "6px",
-                border: "1px solid #cce3de"
+                border: "1px solid rgba(114, 184, 121, 0.32)"
               }}
             >
               <span>Sitio oficial de Collect Earth Online</span>
-              <SvgIcon icon="chevronRight" size="1rem" color="#1F7067" />
+              <SvgIcon icon="chevronRight" size="1rem" color="#9ed999" />
             </a>
             <a
               href="https://github.com/openforis/collect-earth-online"
@@ -302,12 +303,12 @@ export default function Highlights ({userId, userRole}) {
                 gap: "6px",
                 fontSize: "13px",
                 fontWeight: "500",
-                color: "#667085",
+                color: "#d4d4d8",
                 textDecoration: "none"
               }}
             >
               <span>Repositorio Open Source (GitHub)</span>
-              <SvgIcon icon="chevronRight" size="0.9rem" />
+              <SvgIcon icon="chevronRight" size="0.9rem" color="#d4d4d8" />
             </a>
           </div>
         </div>

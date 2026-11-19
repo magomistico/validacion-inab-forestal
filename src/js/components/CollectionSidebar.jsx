@@ -221,7 +221,8 @@ export const NewPlotNavigation = ({userEmail}) => {
   };
   
   const navToPlotId = () => {
-    if (!isNaN(newPlotId)) {
+    const trimmed = String(newPlotId ?? "").trim();
+    if (trimmed !== "" && !isNaN(Number(trimmed))) {
       if (confirmUnsaved()) {
         setAppState(s => ({...s, getNewPlot: true, navDirection: 'id'}));
       }
@@ -402,7 +403,7 @@ export const NewPlotNavigation = ({userEmail}) => {
                     ? "Current Plot: " + currentPlot?.visibleId
                     : "Select a Plot to begin"
               }
-              value={newPlotId}
+              value={newPlotId ?? ""}
               onChange={(e) => setAppState((s) => ({ ...s, newPlotId: e.target.value }))}
             />
             <button className="btn outline" onClick={() => navToPlot("previous")}>
@@ -636,7 +637,7 @@ export const SidebarFooter = ({ processModal }) => {
       _.some(Object.values(userSamples), (sample) => !_.isEmpty(sample));
 
   const confirmFlag = () =>
-    hasAnswers() ||
+    !hasAnswers() ||
       confirm(
         "Flagging this plot will delete your previous answers. Are you sure you want to continue?"
       );
@@ -748,10 +749,15 @@ export const SidebarFooter = ({ processModal }) => {
           : prev.originalUserSamples,
         userImages: bySample((s) => s.userImage, copyValues),
         selectedQuestionId,
+        selectedSampleIds: [],
+        selectedSampleId: -1,
         collectionStart: Date.now(),
         unansweredColor: "black",
       };
     });
+    if (mapConfig) {
+      mercator.selectFeatures(mapConfig, []);
+    }
   };
 
   const clearAll = (drawTool) => {

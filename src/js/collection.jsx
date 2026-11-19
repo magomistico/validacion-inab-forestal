@@ -294,9 +294,9 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
           {}
         )
         : {},
-      selectedQuestionId: state.selectedQuestionId > 0
-        ? state.selectedQuestionId
-        : parseInt(firstQuestionId),
+      selectedQuestionId: parseInt(firstQuestionId),
+      selectedSampleIds: [],
+      selectedSampleId: -1,
       collectionStart: Date.now(),
     };
   };
@@ -434,13 +434,11 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
       "currentSamples",
       (sampleIds) => {
         if (syncRef.current) return;
-        setState((s) => ({...s, selectedSampleIds: sampleIds}));
-        /*
-          setState((s) => ({
-          ...s, selectedSampleIds: {
-            ...s.selectedSampleIds,
-            [getParentId(state.selectedQuestionId)]: sampleIds}}));
-        */
+        setState((s) => ({
+          ...s,
+          selectedSampleIds: sampleIds,
+          selectedSampleId: sampleIds.length === 1 ? sampleIds[0] : -1,
+        }));
       }, 
       state.selectedSampleIds
     );
@@ -558,7 +556,7 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
       ([questionId, question]) => {
         const visible = calcVisibleSamples(Number(questionId)) || [];
         const answered = visible
-              .filter((vs) => userSamples[vs.id][questionId])
+              .filter((vs) => userSamples?.[vs.id]?.[questionId])
               .map((vs) => ({
                 sampleId: vs.id,
                 answerId: Number(userSamples[vs.id][questionId].answerId),
@@ -739,11 +737,6 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
   return (
     <div className="container-fluid collection-page">
       <div className="row no-gutters">
-        {state?.modal?.alert && (
-          <Modal title={state.modal.alert.alertType} onClose={() => setState((s) => ({ ...s, modal: null }))}>
-            {state.modal.alert.alertMessage}
-          </Modal>
-        )}
         {state.currentProject?.type === "simplified" && (
           <div
             className="d-flex flex-column position-absolute full-height"
@@ -751,8 +744,9 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
               top: "var(--page-top)",
               left: state.isImageryLayersExpanded ? "0px" : "-236.183px",
               width: "236.183px",
-              backgroundColor: "#fff",
-              boxShadow: "2px 0 5px rgba(0,0,0,.2)",
+              backgroundColor: "#0b110d",
+              color: "#e4e4e7",
+              boxShadow: "2px 0 5px rgba(0,0,0,.45)",
               transition: "left .3s ease",
               zIndex: 10,
             }}

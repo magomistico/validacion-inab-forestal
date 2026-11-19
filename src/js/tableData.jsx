@@ -127,7 +127,7 @@ const JsonCell = ({ row }) => {
         overflow: "hidden",
         textOverflow: "ellipsis",
         cursor: "pointer",
-        color: "blue",
+        color: "#9ed999",
       }}
       title="Click to copy answers JSON"
     >

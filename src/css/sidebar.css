@@ -124,10 +124,16 @@
   border-radius: 8px;
   background-color: #070b08;
   color: #ffffff;
+  color-scheme: dark;
   font-size: 0.9rem;
   margin-bottom: 12px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sidebar-select option {
+  background-color: #0b110d;
+  color: #f4f4f5;
 }
 
 .sidebar-select:focus {
@@ -213,9 +219,15 @@
   background-color: #070b08;
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #ffffff;
+  color-scheme: dark;
   border-radius: 8px;
   font-size: 0.9rem;
   outline: none;
+}
+
+.sidebar-plot-navigation input::placeholder {
+  color: #a1a1aa;
+  opacity: 1;
 }
 
 .sidebar-plot-navigation input:focus {
@@ -265,7 +277,8 @@
   transition: all 0.2s ease;
 }
 
-.btn.outline:hover {
+.btn.outline:hover,
+.btn.outline:focus {
   background-color: rgba(16, 185, 129, 0.18);
   border-color: #10b981;
   color: #ffffff;
@@ -285,8 +298,10 @@
   transition: all 0.2s ease;
 }
 
-.btn.filled:hover {
+.btn.filled:hover,
+.btn.filled:focus {
   background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  color: #ffffff;
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4);
 }

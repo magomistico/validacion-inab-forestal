@@ -57,9 +57,9 @@ export default function Institutions ({userId, userRole, projects}) {
               alignItems: "center",
               gap: "12px",
               padding: "12px",
-              background: "#F4F8F6",
+              background: "rgba(114, 184, 121, 0.1)",
               borderRadius: "8px",
-              border: "1px solid #D6E5DF"
+              border: "1px solid rgba(114, 184, 121, 0.28)"
             }}>
               <div style={{
                 width: "44px",
@@ -77,10 +77,10 @@ export default function Institutions ({userId, userRole, projects}) {
                 INAB
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: "16px", color: "#1F7067" }}>
+                <div style={{ fontWeight: 700, fontSize: "16px", color: "#9ed999" }}>
                   INAB · SIG
                 </div>
-                <div style={{ fontSize: "12px", color: "#5F746C" }}>
+                <div style={{ fontSize: "12px", color: "#d4d4d8" }}>
                   Instituto Nacional de Bosques
                 </div>
               </div>
@@ -127,7 +127,7 @@ export default function Institutions ({userId, userRole, projects}) {
                   flexDirection: "column",
                   gap: "8px",
                   padding: "10px 14px 14px 14px",
-                  background: "#f8faf9",
+                  background: "#070b08",
                   borderRadius: "0 0 6px 6px",
                 }}
               >
@@ -159,24 +159,24 @@ export default function Institutions ({userId, userRole, projects}) {
                       className="project-item"
                       style={{
                         padding: "10px 12px",
-                        border: "1px solid #dfe4e1",
+                        border: "1px solid rgba(114, 184, 121, 0.22)",
                         borderRadius: "6px",
-                        background: "#fff",
+                        background: "#0d140f",
                         cursor: "pointer",
                         fontWeight: 500,
-                        color: "#2f3e2f",
+                        color: "#e4e4e7",
                         transition: "background 0.15s ease",
                       }}
                       onClick={() => (window.location.href =
                                       `/project-wizard?projectId=${project.id}&institutionId=${inst.id}`)}
-                      onMouseOver={(e) => (e.currentTarget.style.background = "#f1f5f3")}
-                      onMouseOut={(e) => (e.currentTarget.style.background = "#fff")}
+                      onMouseOver={(e) => (e.currentTarget.style.background = "rgba(114, 184, 121, 0.14)")}
+                      onMouseOut={(e) => (e.currentTarget.style.background = "#0d140f")}
                     >
                       {project.name}
                     </div>
                   ))
                 ) : (
-                  <div style={{ fontSize: "12px", color: "#667085", padding: "6px 4px", textAlign: "center" }}>
+                  <div style={{ fontSize: "12px", color: "#a1a1aa", padding: "6px 4px", textAlign: "center" }}>
                     No hay proyectos registrados aún.
                   </div>
                 )}

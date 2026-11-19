@@ -459,7 +459,7 @@ export const PlotGenerationCard = () => {
               onChange={(e) => processIncomingDataFile(e, fileType)}
             />
           </label>
-          <span className="text-label-sm" style={{ color: plotFileName ? '#333' : '#999', fontStyle: !plotFileName ? 'italic' : 'normal' }}>
+          <span className="text-label-sm" style={{ color: plotFileName ? '#f4f4f5' : '#a1a1aa', fontStyle: !plotFileName ? 'italic' : 'normal' }}>
             {plotFileName ? `File: ${plotFileName}` : 'No dataset file uploaded'}
           </span>
         </div>
@@ -545,16 +545,16 @@ export const PlotGenerationCard = () => {
       {!mode.fileOnly && GENERATED_DISTRIBUTIONS.includes(plotDistribution) && renderPlotShapeInput()}
 
       {plotLimitError && (
-        <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#fff0f0', border: '1px solid #ffcccc' }}>
-          <p style={{ margin: 0, color: '#cc0000', fontSize: '0.9rem', fontWeight: '500' }}>
+        <div className="mt-3 p-3 rounded" style={{ backgroundColor: 'rgba(127, 29, 29, 0.25)', border: '1px solid rgba(248, 113, 113, 0.4)' }}>
+          <p style={{ margin: 0, color: '#fca5a5', fontSize: '0.9rem', fontWeight: '500' }}>
             {plotLimitError}
           </p>
         </div>
       )}
 
       {!plotLimitError && totalPlotsCalculated > 0 && (
-        <div className="mt-4 p-3 rounded" style={{ backgroundColor: '#e6f4f4', border: '1px solid #2d6f74' }}>
-          <p className="font-italic" style={{ margin: 0, color: '#2d6f74', fontSize: '0.9rem', fontWeight: '500' }}>
+        <div className="mt-4 p-3 rounded" style={{ backgroundColor: 'rgba(114, 184, 121, 0.12)', border: '1px solid rgba(114, 184, 121, 0.35)' }}>
+          <p className="font-italic" style={{ margin: 0, color: '#9ed999', fontSize: '0.9rem', fontWeight: '500' }}>
             {mode.banner(totalPlotsCalculated)}
           </p>
         </div>
@@ -978,7 +978,7 @@ export const ExistingPlotsCard = () => {
       {rows.map(([label, value]) => (
         <div key={label} className="d-flex justify-content-between mb-2">
           <span className="text-label-sm" style={{ color: 'var(--Neutral-Text-gray)', margin: 0 }}>{label}</span>
-          <span className="text-label-sm" style={{ color: '#333', fontWeight: 500, margin: 0 }}>{value}</span>
+          <span className="text-label-sm" style={{ color: '#f4f4f5', fontWeight: 500, margin: 0 }}>{value}</span>
         </div>
       ))}
     </div>

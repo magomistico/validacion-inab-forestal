@@ -176,13 +176,13 @@ export const QuestionCard = ({
               className="btn-icon-sm question-action-btn"
               onClick={() => onMove(qId, -1)}
             >
-              <SvgIcon icon="upCaretNew" color="#2d6f74" size="2rem" />
+              <SvgIcon icon="upCaretNew" color="#9ed999" size="2rem" />
             </button>
             <button
               className="btn-icon-sm question-action-btn"
               onClick={() => onMove(qId, 1)}
             >
-              <SvgIcon icon="downCaretNew" color="#2d6f74" size="2rem" />
+              <SvgIcon icon="downCaretNew" color="#9ed999" size="2rem" />
             </button>
             <span className="question-header-title">
               {getHierarchyString(qId)}. {question.question}
@@ -195,7 +195,7 @@ export const QuestionCard = ({
             <SvgIcon
               icon={isCollapsed ? "downCaretNew" : "upCaretNew"}
               size="2rem"
-              color="#000"
+              color="#d4d4d8"
             />
           </button>
         </div>

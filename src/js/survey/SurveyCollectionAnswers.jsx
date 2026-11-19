@@ -219,7 +219,8 @@ class AnswerDropDown extends React.Component {
             return validateAndSetCurrentValue(surveyNodeId, ansId, ans.answer);
           }}
           style={{
-            backgroundColor: answered.some((a) => a.answerId === ansId) ? "#e8e8e8" : "#f1f1f1",
+            backgroundColor: answered.some((a) => a.answerId === ansId) ? "rgba(114, 184, 121, 0.22)" : "#0b110d",
+            color: "#e4e4e7",
           }}
         >
           <div className="col-1">
@@ -287,9 +288,11 @@ class AnswerDropDown extends React.Component {
             style={{
               display: showDropdown ? "flex" : "none",
               position: "absolute",
-              backgroundColor: "#f1f1f1",
+              backgroundColor: "#0b110d",
+              color: "#e4e4e7",
+              border: "1px solid rgba(114, 184, 121, 0.3)",
               overflow: "auto",
-              boxShadow: "0px 8px 16px 0px rgba(0,0,0,0.2)",
+              boxShadow: "0px 8px 16px 0px rgba(0,0,0,0.55)",
               zIndex: "10",
               cursor: "pointer",
             }}

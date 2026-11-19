@@ -105,7 +105,10 @@ class UserDisagreement extends React.Component {
         >
           <div
             style={{
-              background: "white",
+              background: "#0b110d",
+              color: "#e4e4e7",
+              border: "1px solid rgba(114, 184, 121, 0.22)",
+              borderRadius: "8px",
               display: "flex",
               flexDirection: "column",
               gap: ".5rem",

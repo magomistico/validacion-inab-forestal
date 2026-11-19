@@ -150,7 +150,7 @@ export const BoundaryStep = ({ imageryList = [] }) => {
           <section style={{ width: '100%' }}>
             {generationMethod === "manual" && (
               <div>
-                <p className="font-italic" style={{ fontSize: '0.85rem', color: '#555' }}>
+                <p className="font-italic" style={{ fontSize: '0.85rem', color: '#a1a1aa' }}>
                   * Hold CTRL and click-and-drag a bounding box on the map
                 </p>
               </div>
@@ -158,7 +158,7 @@ export const BoundaryStep = ({ imageryList = [] }) => {
 
             {generationMethod === "plotFile" && (
               <div>
-                <p className="font-italic" style={{ fontSize: '0.85rem', color: '#666' }}>
+                <p className="font-italic" style={{ fontSize: '0.85rem', color: '#a1a1aa' }}>
                   - No configuration required. Your area boundary track paths will extract automatically when plots load during the next page phase.
                 </p>
               </div>
@@ -166,13 +166,13 @@ export const BoundaryStep = ({ imageryList = [] }) => {
 
             {generationMethod === "shpFile" && (
               <div className="d-flex flex-column">
-                <p className="font-italic" style={{ fontSize: '0.85rem', color: '#666' }}>
+                <p className="font-italic" style={{ fontSize: '0.85rem', color: '#a1a1aa' }}>
                   - Upload a polygon shapefile of the boundary of your entire project area. Requires a zip of SHP, SHX, DBF, and PRJ files. Define plots in the next step.
                   <a href="https://collect-earth-online-doc.readthedocs.io/en/latest/project/plotsample.html" target="_blank"> Learn more</a>
                 </p>
 
                 <label className="text-label-sm" style={{ marginBottom: '8px', fontWeight: 'bold' }}>
-                  UPLOAD <span style={{ color: 'red' }}>*</span>
+                  UPLOAD <span style={{ color: '#f87171' }}>*</span>
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                   <label 
@@ -193,7 +193,7 @@ export const BoundaryStep = ({ imageryList = [] }) => {
                       }}
                     />
                   </label>
-                  <span className="text-label-sm" style={{ color: aoiFileName ? '#333' : '#999', fontStyle: !aoiFileName ? 'italic' : 'normal' }}>
+                  <span className="text-label-sm" style={{ color: aoiFileName ? '#f4f4f5' : '#a1a1aa', fontStyle: !aoiFileName ? 'italic' : 'normal' }}>
                     {aoiFileName ? `File: ${aoiFileName}` : 'No archive file selected'}
                   </span>
                 </div>
