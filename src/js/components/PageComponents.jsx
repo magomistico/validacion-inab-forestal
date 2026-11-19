@@ -76,7 +76,9 @@ export function LogOutButton({ userName, uri }) {
   ) : (
     <>
       <li className="nav-item my-auto" id="username">
-        <span className="nav-link disabled">{userName}</span>
+        <span className="nav-link disabled" style={{ color: "#d4d4d8", opacity: 1 }}>
+          {userName}
+        </span>
       </li>
       <button className="btn btn-outline-red btn-sm" onClick={logout} type="button">
         Logout
@@ -116,12 +118,14 @@ class HelpSlideDialog extends React.Component {
             className="overflow-hidden container-fluid d-flex flex-column"
             onClick={(e) => e.stopPropagation()}
             style={{
-              backgroundColor: "white",
-              border: "1.5px solid",
-              borderRadius: "5px",
+              backgroundColor: "#0b110d",
+              color: "#e4e4e7",
+              border: "1.5px solid rgba(114, 184, 121, 0.35)",
+              borderRadius: "10px",
               height: "900px",
               margin: "90px auto",
               width: "fit-content",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.65)",
             }}
           >
             <div
@@ -133,9 +137,9 @@ class HelpSlideDialog extends React.Component {
               </h2>
               <div
                 onClick={closeHelpMenu}
-                style={{ position: "absolute", top: "10px", right: "10px" }}
+                style={{ position: "absolute", top: "10px", right: "10px", color: "#ffffff", cursor: "pointer" }}
               >
-                <SvgIcon icon="close" size="2rem" />
+                <SvgIcon color="white" icon="close" size="2rem" />
               </div>
             </div>
             <div className="d-flex align-items-center" style={{ height: "100%" }}>
@@ -386,7 +390,12 @@ export function NavTopBar ({version, userName, userId, children}) {
                 <a
                   className="nav-link"
                   href={"/account?accountId=" + userId}
-                  style={{ fontWeight: 500, fontSize: "0.82rem", color: "#a1a1aa", padding: "6px 12px" }}
+                  style={{
+                    fontWeight: uri === "/account" ? 600 : 500,
+                    fontSize: "0.82rem",
+                    color: uri === "/account" ? "#9ed999" : "#d4d4d8",
+                    padding: "6px 12px",
+                  }}
                 >
                   Cuenta
                 </a>
@@ -544,29 +553,31 @@ export function LoadingModal({ message }) {
     <div
       style={{
         position: "fixed",
-        zIndex: "100",
+        zIndex: "2000",
         left: "0",
         top: "0",
         width: "100%",
         height: "100%",
-        backgroundColor: "rgba(0,0,0,0.4)",
+        backgroundColor: "rgba(0,0,0,0.65)",
       }}
     >
       <div
         style={{
           alignItems: "center",
-          backgroundColor: "white",
-          border: "1.5px solid",
-          borderRadius: "5px",
+          backgroundColor: "#0b110d",
+          color: "#f4f4f5",
+          border: "1.5px solid rgba(114, 184, 121, 0.35)",
+          borderRadius: "10px",
           display: "flex",
           margin: "20% auto",
           width: "fit-content",
+          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
         }}
       >
         <div className="p-3">
           <div id="spinner" style={{ height: "2.5rem", position: "static", width: "2.5rem" }} />
         </div>
-        <label className="m-0 mr-3">{message}</label>
+        <label className="m-0 mr-3" style={{ color: "#f4f4f5" }}>{message}</label>
       </div>
     </div>
   );
@@ -578,7 +589,7 @@ export const LearningMaterialModal = ({ learningMaterial, onClose }) => {
       className="modal fade show"
       id="quitModal"
       onClick={onClose}
-      style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.4)" }}
+      style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.55)" }}
     >
       <div
         className="modal-dialog modal-dialog-centered"
@@ -605,30 +616,32 @@ export function SuccessModal({ message, onClose }) {
     <div
       style={{
         position: "fixed",
-        zIndex: "100",
+        zIndex: "2000",
         left: "0",
         top: "0",
         width: "100%",
         height: "100%",
-        backgroundColor: "rgba(0,0,0,0.4)",
+        backgroundColor: "rgba(0,0,0,0.65)",
       }}
       onClick={onClose}
     >
       <div
         style={{
           alignItems: "center",
-          backgroundColor: "white",
-          border: "1.5px solid",
-          borderRadius: "5px",
+          backgroundColor: "#0b110d",
+          color: "#f4f4f5",
+          border: "1.5px solid rgba(114, 184, 121, 0.35)",
+          borderRadius: "10px",
           display: "flex",
           margin: "20% auto",
           width: "fit-content",
+          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
         }}
       >
         <div className="p-3">
-          <SvgIcon color="var(--lightgreen)" icon="check" size="1.25rem" verticalAlign="initial" />
+          <SvgIcon color="#72b879" icon="check" size="1.25rem" verticalAlign="initial" />
         </div>
-        <label className="m-0 mr-3">{message}</label>
+        <label className="m-0 mr-3" style={{ color: "#f4f4f5" }}>{message}</label>
       </div>
     </div>
   );
@@ -919,28 +932,30 @@ export function PromptModal({title, inputs, callBack, closePrompt}) {
     <div
       style={{
         position: "fixed",
-        zIndex: "100",
+        zIndex: "2000",
         left: "0",
         top: "0",
         width: "100%",
         height: "100%",
-        backgroundColor: "rgba(0,0,0,0.4)",
+        backgroundColor: "rgba(0,0,0,0.65)",
       }}
     >
       <div
         style={{
           flexDirection: "column",
-          backgroundColor: "white",
-          border: "1.5px solid",
-          borderRadius: "5px",
+          backgroundColor: "#0b110d",
+          color: "#f4f4f5",
+          border: "1.5px solid rgba(114, 184, 121, 0.35)",
+          borderRadius: "10px",
           display: "flex",
           margin: "20% auto",
           width: "fit-content",
-          padding: "1.25rem"
+          padding: "1.25rem",
+          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
         }}
       >
         <div className="container">
-          <label>{title}</label>
+          <label style={{ color: "#ffffff", fontWeight: 600 }}>{title}</label>
         </div>
         <div className="break"></div>
         {mappedInputs}

@@ -48,7 +48,7 @@ export const BulkActions = ({
         {showVisibilityMenu && (
           <div className="bulk-actions-dropdown">
             {description && (
-              <div style={{ fontStyle: "italic", fontSize: "13px", lineHeight: "1.4", marginBottom: "12px", color: "#555" }}>
+              <div style={{ fontStyle: "italic", fontSize: "13px", lineHeight: "1.4", marginBottom: "12px", color: "#a1a1aa" }}>
                 {description}
               </div>
             )}

@@ -134,7 +134,7 @@ export const ImageryStep = ({ imageryList = [] }) => {
 
           <section style={{ width: '100%' }}>
             <p className="card-title">ADDITIONAL IMAGERY (OPTIONAL)</p>
-            <p style={{ fontSize: '0.75rem', color: '#666', marginBottom: '15px' }}>
+            <p style={{ fontSize: '0.75rem', color: '#a1a1aa', marginBottom: '15px' }}>
               {selectedIds.length} Selected
             </p>
             

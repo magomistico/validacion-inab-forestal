@@ -37,8 +37,11 @@
 
 .date-picker {
   padding: 5px;
-  border: 1px solid #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 4px;
+  background-color: #060706;
+  color: #ffffff;
+  color-scheme: dark;
 }
 
 .download-csv-btn {
@@ -61,13 +64,15 @@
 .metrics-table {
   width: 100%;
   border-collapse: collapse;
+  color: #e4e4e7;
 }
 
 .metrics-table th,
 .metrics-table td {
-  border: 1px solid #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   padding: 8px;
   text-align: left;
+  color: #e4e4e7;
 }
 
 .metrics-table th {
@@ -76,8 +81,8 @@
 }
 
 .custom-dropdown {
-  background-color: #F0EBEB !important;
-  border-color: #F0EBEB !important;
-  color: black;
+  background-color: #0b110d !important;
+  border-color: rgba(114, 184, 121, 0.3) !important;
+  color: #e4e4e7 !important;
   text-align: left; 
 }

@@ -73,10 +73,10 @@ export default class StatsWidget extends React.Component {
         }}
       />
       <div>
-        <label style={{ color: "#787878", margin: "0 0 0 .5rem" }}>{label}:</label>
+        <label style={{ color: "#a1a1aa", margin: "0 0 0 .5rem" }}>{label}:</label>
         <label
           style={{
-            color: "#606060",
+            color: "#f4f4f5",
             fontWeight: "bold",
             margin: "0 0 0 .51rem",
           }}

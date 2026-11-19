@@ -701,7 +701,8 @@ class SimpleCollection extends React.Component {
             className="border-left h-100"
             id="simple-sidebar"
             style={{
-              background: "white",
+              background: "#0b110d",
+              color: "#e4e4e7",
               right: this.state.showSidebar ? 0 : "max(-25rem, -100%)",
               zIndex: 101,
               width: "min(25rem, 100%)",
@@ -718,20 +719,23 @@ class SimpleCollection extends React.Component {
                 width: "2.5rem",
                 left: "-2.5rem",
                 top: "3rem",
-                background: "white",
+                background: "#0b110d",
+                border: "1px solid rgba(114, 184, 121, 0.25)",
+                borderRight: "none",
+                cursor: "pointer",
               }}
             >
               <SvgIcon
-                color="black"
+                color="#e4e4e7"
                 icon={this.state.showSidebar ? "rightDouble" : "leftDouble"}
                 size="1.5rem"
               />
             </div>
             <div
               onClick={() => this.setState({ showSidebar: false })}
-              style={{ position: "absolute", right: "1rem", top: "1rem" }}
+              style={{ position: "absolute", right: "1rem", top: "1rem", cursor: "pointer" }}
             >
-              <SvgIcon color="black" icon="close" size="1.5rem" />
+              <SvgIcon color="#ffffff" icon="close" size="1.5rem" />
             </div>
             <h2
               className="header overflow-hidden text-truncate w-100 m-0"
@@ -1172,10 +1176,10 @@ function NavigationBar({ children }) {
   return (
     <>
       <nav
-        className="navbar navbar-expand-lg navbar-light fixed-top py-0"
+        className="navbar navbar-expand-lg navbar-dark fixed-top py-0"
         id="main-nav"
         ref={navRef}
-        style={{ backgroundColor: "white", borderBottom: "1px solid black" }}
+        style={{ backgroundColor: "#0b110d", borderBottom: "1px solid rgba(114, 184, 121, 0.25)" }}
       >
         <a className="navbar-brand pt-1 pb-1" href="/home">
           <img alt="INAB · SIG" id="ceo-site-logo" src="/img/inab-logo.svg" />

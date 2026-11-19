@@ -175,14 +175,22 @@ const InstitutionDashboard = ({ institutionId }) => {
           <DataTable
             columns={columns}
             data={filteredItems}
+            customStyles={{
+              table: { style: { backgroundColor: "#0b110d", color: "#e4e4e7" } },
+              headRow: { style: { backgroundColor: "rgba(114, 184, 121, 0.12)", color: "#9ed999" } },
+              headCells: { style: { color: "#9ed999", fontWeight: 600 } },
+              rows: { style: { backgroundColor: "#0b110d", color: "#e4e4e7", borderBottomColor: "rgba(255,255,255,0.08)" } },
+              subHeader: { style: { backgroundColor: "#0b110d", color: "#e4e4e7" } },
+              pagination: { style: { backgroundColor: "#0b110d", color: "#d4d4d8" } },
+            }}
             subHeader
             subHeaderComponent={subHeaderComponentMemo}
           />
         </div>
       ) : (
-        <div className="mx-4 my-3 d-flex align-items-center" style={{ width: "90%", padding: "20px 24px", background: "#f8faf9", borderRadius: "8px", border: "1px solid #d6e2dd" }}>
-          <SvgIcon icon="alert" size="1.4rem" color="#1F7067" />
-          <p style={{ marginLeft: "0.8rem", marginBottom: 0, fontSize: "14px", color: "#2f3e2f" }}>
+        <div className="mx-4 my-3 d-flex align-items-center" style={{ width: "90%", padding: "20px 24px", background: "#0b110d", borderRadius: "8px", border: "1px solid rgba(114, 184, 121, 0.3)" }}>
+          <SvgIcon icon="alert" size="1.4rem" color="#72b879" />
+          <p style={{ marginLeft: "0.8rem", marginBottom: 0, fontSize: "14px", color: "#e4e4e7" }}>
             El panel de proyectos está listo. Cuando se registren proyectos de validación forestal para el INAB, se mostrarán aquí con sus métricas y progreso.
           </p>
         </div>

@@ -214,7 +214,7 @@ export const SampleGenerationCard = ({ setSampleFeatures }) => {
         onChange={handleDistributionChange}
         colSize="text-input"
       />
-      <div className="mt-3 p-3" style={{ backgroundColor: '#e6f4f4', border: '1px solid #2d6f74', color: '#2d6f74', fontSize: '0.9rem' }}>
+      <div className="mt-3 p-3 rounded" style={{ backgroundColor: 'rgba(114, 184, 121, 0.12)', border: '1px solid rgba(114, 184, 121, 0.35)', color: '#9ed999', fontSize: '0.9rem' }}>
         <SvgIcon icon="info" size="1rem" style={{ marginRight: '8px', verticalAlign: 'middle' }} />
         Sample points will be distributed within the plot boundary based on the selected method.
       </div>
@@ -246,7 +246,7 @@ export const SampleGenerationCard = ({ setSampleFeatures }) => {
       {FILE_SAMPLE_DISTRIBUTIONS.includes(sampleDistribution) && (
         <div className="form-group mt-3">
           <label className="text-label-sm" style={{ fontWeight: 'bold' }}>
-            UPLOAD SAMPLE FILE <span style={{ color: 'red' }}>*</span>
+            UPLOAD SAMPLE FILE <span style={{ color: '#f87171' }}>*</span>
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
             <label
@@ -264,11 +264,11 @@ export const SampleGenerationCard = ({ setSampleFeatures }) => {
                 onChange={handleFileUpload}
               />
             </label>
-            <span className="text-label-sm" style={{ color: sampleFileName ? '#333' : '#999', fontStyle: !sampleFileName ? 'italic' : 'normal' }}>
+            <span className="text-label-sm" style={{ color: sampleFileName ? '#f4f4f5' : '#a1a1aa', fontStyle: !sampleFileName ? 'italic' : 'normal' }}>
               {sampleFileName ? `File: ${sampleFileName}` : 'No dataset file uploaded'}
             </span>
           </div>
-          <a href={`test_data/sample-${sampleDistribution}-example.${extension}`} className="text-label-sm mb-3" style={{ textDecoration: 'underline', color: '#007bff' }}>
+          <a href={`test_data/sample-${sampleDistribution}-example.${extension}`} className="text-label-sm mb-3" style={{ textDecoration: 'underline', color: '#72b879' }}>
             Download example sample file
           </a>
         </div>
@@ -308,8 +308,8 @@ export const UserDrawnSamplesCard = () => {
       {allowDrawnSamples && (
         <>
           <div
-            className="mt-3 p-3"
-            style={{ backgroundColor: '#e6f4f4', border: '1px solid #2d6f74', color: '#2d6f74', fontSize: '0.9rem' }}>
+            className="mt-3 p-3 rounded"
+            style={{ backgroundColor: 'rgba(114, 184, 121, 0.12)', border: '1px solid rgba(114, 184, 121, 0.35)', color: '#9ed999', fontSize: '0.9rem' }}>
             <SvgIcon icon="info" size="1rem" style={{ marginRight: '8px', verticalAlign: 'middle' }} />
             Enable this to allow users to draw and label points, lines, and polygons during data collection.
           </div>

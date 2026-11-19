@@ -57,7 +57,7 @@ export const SidebarTabs = ({ tabs, activeTab, onChange }) => (
     style={{
       display: "flex",
       justifyContent: "space-between",
-      borderBottom: "1px solid #ddd",
+      borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
       marginTop: 16,
     }}
   >
@@ -71,8 +71,8 @@ export const SidebarTabs = ({ tabs, activeTab, onChange }) => (
           border: "none",
           padding: "8px 0",
           fontWeight: 600,
-          color: activeTab === id ? "#1b5e20" : "#666",
-          borderBottom: activeTab === id ? "3px solid #1b5e20" : "3px solid transparent",
+          color: activeTab === id ? "#9ed999" : "#a1a1aa",
+          borderBottom: activeTab === id ? "3px solid #72b879" : "3px solid transparent",
           cursor: "pointer",
           transition: "color 0.2s ease, border-color 0.2s ease",
         }}
@@ -130,15 +130,16 @@ export const SidebarCard = ({
              <button
                className="sidebar-collapse-button"
                style={{
-		 background: "none",
-		 border: "none",
-		 padding: 2,
-		 cursor: "pointer",
-	       }}
+                 background: "none",
+                 border: "none",
+                 color: "#d4d4d8",
+                 padding: 2,
+                 cursor: "pointer",
+               }}
                onClick={(e) => {
-		 e.stopPropagation();
-		 setOpen(!open);
-	       }}
+                 e.stopPropagation();
+                 setOpen(!open);
+               }}
              >
                <SvgIcon icon={open ? "upCaret" : "downCaret"} size="1rem" />
              </button>

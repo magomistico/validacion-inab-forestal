@@ -600,11 +600,13 @@ class WidgetLayoutEditor extends React.PureComponent {
                         }}
                       >
                         <div
-                          className="text text-danger mx-auto font-weight-bold mt-2"
+                          className="mx-auto font-weight-bold mt-2"
                           style={{
-                            background: "#f1f1f1",
+                            background: "rgba(11, 17, 13, 0.9)",
+                            color: "#f87171",
+                            border: "1px solid rgba(248, 113, 113, 0.35)",
                             borderRadius: ".5rem",
-                            padding: "0 .5rem",
+                            padding: "2px .6rem",
                             zIndex: 100,
                           }}
                         >

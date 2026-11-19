@@ -47,6 +47,12 @@ export function SurveyQuestions ({
   const selectedSampleId = preview
         ? previewSelectedId
         : globalSelectedId;
+  const activeSampleId =
+    selectedSampleId != null && selectedSampleId >= 0
+      ? selectedSampleId
+      : selectedSampleIds.length === 1
+      ? selectedSampleIds[0]
+      : -1;
   const [openTopId, setOpenTopId] = useState(1);
   // Children are expanded by default once visible (parent answered);
   // this only tracks the ones the user collapsed.
@@ -71,25 +77,58 @@ export function SurveyQuestions ({
     setScrollToChildrenOf(null);
   }, [scrollToChildrenOf]);
 
-  /*
-  function getParent (questionId) {
-    let {parentQuestionId} = surveyData?.[questionId];
-    if ([-1, "-1"].includes(parentQuestionId)) {
-      return questionId;
-    } else {
-      return getParent(parentQuestionId);
+  const getSelectedSampleIds = (questionId) => {
+    if (preview) return [selectedSampleId != null && selectedSampleId >= 0 ? selectedSampleId : 1];
+
+    const q = surveyData?.[questionId];
+    const visibleIds = (q?.visible || []).map((v) => v.id);
+    const answeredIds = new Set((q?.answered || []).map((a) => a.sampleId));
+    const allFeatures = mercator.getAllFeatures(mapConfig, "currentSamples") || [];
+    const allFeatureIds = allFeatures.map((f) => f.get("sampleId"));
+
+    const effectiveVisibleIds =
+      visibleIds.length > 0
+        ? visibleIds
+        : (q && [-1, "-1"].includes(q.parentQuestionId) ? allFeatureIds : []);
+
+    if (selectedSampleIds.length > 0) {
+      const validSelected = selectedSampleIds.filter((id) => effectiveVisibleIds.includes(id));
+      if (
+        allFeatureIds.length > 1 &&
+        selectedSampleIds.length === allFeatureIds.length &&
+        validSelected.length > 0
+      ) {
+        return validSelected;
+      }
+      return selectedSampleIds;
     }
-  }
-  */
-  /*
-  const getSelectedSampleIds = (questionId = selectedQuestionId) => 
-        !selectedQuestionId ? [] :
-    selectedSampleIds[getParent(selectedQuestionId)] || [];
-*/
+
+    if (effectiveVisibleIds.length === 1 || lengthObject(userSamples) === 1) {
+      return effectiveVisibleIds;
+    }
+
+    if (answeredIds.size === 0) {
+      return effectiveVisibleIds;
+    }
+
+    const unansweredIds = effectiveVisibleIds.filter((id) => !answeredIds.has(id));
+    if (unansweredIds.length > 0) {
+      return unansweredIds;
+    }
+
+    return [];
+  };
+
   const checkSelection = (sampleIds, questionId) => {
     if (preview) return true;
     const q = surveyData?.[questionId];
-    const visibleIds = (q?.visible || []).map((v) => v.id);
+    const allFeatureIds = (mercator.getAllFeatures(mapConfig, "currentSamples") || []).map((f) =>
+      f.get("sampleId")
+    );
+    const visibleIds =
+      (q?.visible || []).length > 0
+        ? q.visible.map((v) => v.id)
+        : (q && [-1, "-1"].includes(q.parentQuestionId) ? allFeatureIds : []);
     const invalid = sampleIds.filter((id) => !visibleIds.includes(id));
 
     if (invalid.length) {
@@ -119,9 +158,8 @@ export function SurveyQuestions ({
     return true;
   };
 
-  const setCurrentValue = (questionId, answerId, answerText) => {
-    // const sampleIds = getSelectedSampleIds(questionId);
-    const sampleIds = selectedSampleIds;
+  const setCurrentValue = (questionId, answerId, answerText, resolvedSampleIds = null) => {
+    const sampleIds = resolvedSampleIds ?? getSelectedSampleIds(questionId);
     if (!preview && !checkSelection(sampleIds, questionId)) return;
     if (preview) {
       setPreviewUserSamples((prev) => {
@@ -135,7 +173,7 @@ export function SurveyQuestions ({
           );
           const newQuestion = { answerId };
           if (answerText !== "") newQuestion.answer = answerText;
-          
+
           acc[sampleId] = {
             ...subQuestionsCleared,
             [questionId]: newQuestion,
@@ -149,7 +187,6 @@ export function SurveyQuestions ({
       syncOpenChildren(questionId, answerId, answerText);
       return;
     }
-    
 
     setAppState((prev) => {
       const childQuestionIds = getChildQuestionIds(questionId);
@@ -186,7 +223,7 @@ export function SurveyQuestions ({
         ...prev,
         userSamples: { ...(prev.userSamples || {}), ...newSamples },
         userImages:  { ...(prev.userImages  || {}), ...newUserImages },
-      }; 
+      };
     });
 
     syncOpenChildren(questionId, answerId, answerText);
@@ -252,19 +289,17 @@ export function SurveyQuestions ({
   const getAnswerForSample = (qId, sampleId) => {
     const us = userSamples?.[sampleId]?.[qId];
     if (us) return { answerId: Number(us.answerId), answer: us.answer };
-    const a = (currentProject?.surveyQuestions?.[qId]?.answered || [])
+    const a = (surveyData?.[qId]?.answered || [])
           .find(x => Number(x.sampleId) === Number(sampleId));
     return a ? { answerId: Number(a.answerId), answer: a.answerText } : null;
   };
 
   const isSampleAnswered = (qId, ansObj) => {
     if (!ansObj) return false;
-    const q = currentProject?.surveyQuestions?.[qId];
+    const q = surveyData?.[qId];
     if (!q) return false;
     if (q.componentType === 'input') {
-      const val = q.dataType === 'number'
-            ? (ansObj.answer ?? '').toString().trim()
-            : (ansObj.answer ?? '').toString().trim();
+      const val = (ansObj.answer ?? '').toString().trim();
       // number: must be non-empty and not NaN; text: non-empty string
       if (q.dataType === 'number') return val !== '' && !Number.isNaN(Number(val));
       return val.length > 0;
@@ -274,8 +309,15 @@ export function SurveyQuestions ({
   };
 
   const getQuestionStatusShallow = (questionId) => {
-    const qLive = currentProject?.surveyQuestions?.[questionId];
-    const visibleArr = Array.isArray(qLive?.visible) ? qLive.visible : [];
+    const qLive = surveyData?.[questionId];
+    const visibleArr =
+      Array.isArray(qLive?.visible) && qLive.visible.length > 0
+        ? qLive.visible
+        : preview
+        ? [{ id: selectedSampleId != null && selectedSampleId >= 0 ? selectedSampleId : 1 }]
+        : (qLive && [-1, "-1"].includes(qLive.parentQuestionId)
+          ? (mercator.getAllFeatures(mapConfig, "currentSamples") || []).map((f) => ({ id: f.get("sampleId") }))
+          : []);
     if (visibleArr.length === 0) return 'none';
     const visibleIds = visibleArr.map(v => Number(v.id));
 
@@ -309,19 +351,20 @@ export function SurveyQuestions ({
   // Gets answers for a question depending on the userSample
   const getCurrentAnswer = (questionId) => {
     const toNum = (v) => (v == null ? v : Number(v));
-    if (selectedSampleId != null && selectedSampleId >= 0) {
-      const us = userSamples?.[selectedSampleId]?.[questionId];
+    if (activeSampleId != null && activeSampleId >= 0) {
+      const us = userSamples?.[activeSampleId]?.[questionId];
       if (us) return { answerId: toNum(us.answerId), answer: us.answer };
-      const fromSurvey = (currentProject?.surveyQuestions?.[questionId]?.answered || [])
-            .find(a => a.sampleId === selectedSampleId);
+      const fromSurvey = (surveyData?.[questionId]?.answered || [])
+            .find(a => Number(a.sampleId) === Number(activeSampleId));
       if (fromSurvey) return { answerId: toNum(fromSurvey.answerId), answer: fromSurvey.answerText };
+      return null;
     }
-    const anyAnswers = (currentProject?.surveyQuestions?.[questionId]?.answered || [])[0];
+    const anyAnswers = (surveyData?.[questionId]?.answered || [])[0];
     if (anyAnswers) {
       return {
         answerId: toNum(anyAnswers.answerId), answer: anyAnswers.answerText
-      }
-    };
+      };
+    }
     const first = Object.values(userSamples || {}).find(sample => sample?.[questionId]);
     return first ? { answerId: toNum(first[questionId].answerId), answer: first[questionId].answer } : null;
   };
@@ -329,10 +372,10 @@ export function SurveyQuestions ({
   
   // Get child question ids
   const getChildQuestionIds = (currentQuestionId) => {
-    const surveyQuestions = currentProject?.surveyQuestions || {};
+    const surveyQuestionsData = surveyData || {};
 
     const directChildren = mapObjectArray(
-      filterObject(surveyQuestions, ([_id, val]) => val.parentQuestionId === currentQuestionId),
+      filterObject(surveyQuestionsData, ([_id, val]) => val.parentQuestionId === currentQuestionId),
       ([key]) => Number(key)
     );
 
@@ -427,7 +470,7 @@ export function SurveyQuestions ({
                   fontWeight: isActive ? 'bold' : 'normal'
                 }}
                 className={`sq-pill ${isActive ? 'active' : ''}`}
-                onClick={() => validateAndSetCurrentValue(q.id, Number(id), a.answer, q)}
+                onClick={() => validateAndSetCurrentValue(q.id, Number(id), a.answer)}
               >
                 <span className="dot" style={{ background: a.color }} />
                 {String(a.answer)}
@@ -448,7 +491,7 @@ export function SurveyQuestions ({
                 type="radio"
                 name={`q-${q.id}`}
                 checked={current ? Number(current.answerId) === Number(id) : false}
-                onChange={() => validateAndSetCurrentValue(q.id, Number(id), a.answer, q)}
+                onChange={() => validateAndSetCurrentValue(q.id, Number(id), a.answer)}
               />
               <span>{String(a.answer)}</span>
             </label>
@@ -469,12 +512,18 @@ export function SurveyQuestions ({
               const selectedId = e.target.value;
               if (selectedId === '') return;
               const ans = q.answers[selectedId];
-              if (ans) validateAndSetCurrentValue(q.id, Number(selectedId), ans.answer, q);
+              if (ans) validateAndSetCurrentValue(q.id, Number(selectedId), ans.answer);
             }}
           >
-            <option value="">Select</option>
+            <option value="" style={{ backgroundColor: "#0b110d", color: "#a1a1aa" }}>
+              Select
+            </option>
             {visibleAnswers(q).map(([id, a]) => (
-              <option key={id} value={id} style={{color: a.color}}>
+              <option
+                key={id}
+                value={id}
+                style={{ backgroundColor: "#0b110d", color: a.color || "#f4f4f5" }}
+              >
                 ● {String(a.answer)}
               </option>
             ))}
@@ -486,16 +535,27 @@ export function SurveyQuestions ({
     input: (q) => {
       const current = getCurrentAnswer(q.id);
       const val = current?.answer ?? '';
+      const inputAnswerId = Number(Object.keys(q.answers || {})[0] ?? 0);
       return (
         <div className="sq-input-wrap">
           <input
+            key={`${currentPlot?.id ?? 'preview'}-${activeSampleId}-${q.id}`}
             className="sq-input"
             type={q.dataType}
-            placeholder={val || q.questionLabel}
+            placeholder={val !== '' ? String(val) : (q.questionLabel || q.question)}
             defaultValue={val}
-            onBlur={(e) => validateAndSetCurrentValue(q.id, 0, e.target.value, q)}
+            onBlur={(e) => {
+              const nextVal = e.target.value;
+              if (nextVal === String(val)) return;
+              const ok = validateAndSetCurrentValue(q.id, inputAnswerId, nextVal);
+              if (!ok) e.target.value = String(val);
+            }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') validateAndSetCurrentValue(q.id, 0, e.currentTarget.value, q);
+              if (e.key === 'Enter') {
+                const nextVal = e.currentTarget.value;
+                const ok = validateAndSetCurrentValue(q.id, inputAnswerId, nextVal);
+                if (!ok) e.currentTarget.value = String(val);
+              }
             }}
           />
         </div>
@@ -523,19 +583,17 @@ export function SurveyQuestions ({
       if (getQuestionStatus(p.id) === 'complete') validated++;
     }
     return { validatedCount: validated, totalTop: total };
-  }, [parents, currentProject?.surveyQuestions, userSamples]);
+  }, [parents, surveyData, userSamples]);
 
 
   // SURVEY RULES
   const getSurveyQuestionText = (questionId) => {
-    const { surveyQuestions } = currentProject;
-    const visibleSurveyQuestions = filterObject(surveyQuestions, ([_id, val]) => val.hideQuestion != true);
+    const visibleSurveyQuestions = filterObject(surveyData || {}, ([_id, val]) => val.hideQuestion != true);
     return _.get(visibleSurveyQuestions, [questionId, "question"], "");
   };
 
   const getSurveyAnswerText = (questionId, answerId) => {
-    const { surveyQuestions } = currentProject;
-    return _.get(surveyQuestions, [questionId, "answered", answerId, "answerText"], "");
+    return _.get(surveyData, [questionId, "answers", answerId, "answer"], "");
   };
 
   const checkRuleTextMatch = (surveyRule, questionIdToSet, _answerId, answerText) => {
@@ -547,9 +605,11 @@ export function SurveyQuestions ({
   };
 
   const checkRuleNumericRange = (surveyRule, questionIdToSet, _answerId, answerText) => {
+    const numVal = Number(answerText);
     if (
       surveyRule.questionId === questionIdToSet &&
-        (answerText < surveyRule.min || answerText > surveyRule.max)
+        answerText !== "" &&
+        (Number.isNaN(numVal) || numVal < Number(surveyRule.min) || numVal > Number(surveyRule.max))
     ) {
       return `Numeric range validation failed.\r\n\n Please select a value between ${surveyRule.min} and ${surveyRule.max}`;
     } else {
@@ -558,31 +618,31 @@ export function SurveyQuestions ({
   };
 
   const sumAnsweredQuestionsPerSample = (answeredQuestions, sampleId) =>
-        Object.entries(answeredQuestions).reduce((acc, [qId, aq]) => {
-          const answer = aq.answered.find((ans) => ans.sampleId === sampleId);
-          const answeredVal = Number(answer.answerText || aq.answers[answer.answerId].answer || 0);
+        Object.entries(answeredQuestions).reduce((acc, [_qId, aq]) => {
+          const answer = (aq.answered || []).find((ans) => Number(ans.sampleId) === Number(sampleId));
+          const answeredVal = answer
+            ? Number(answer.answerText || aq.answers?.[answer.answerId]?.answer || 0)
+            : 0;
           return acc + answeredVal;
         }, 0);
 
   const getAnsweredQuestions = (ruleQuestions, questionIdToSet) =>
-        filterObject(currentProject?.surveyQuestions, ([sqId, sq]) => {
+        filterObject(surveyData || {}, ([sqId, sq]) => {
           const numSqId = Number(sqId);
           return (
-            ruleQuestions.includes(numSqId) && sq.answered.length > 0 && numSqId !== questionIdToSet
+            ruleQuestions.includes(numSqId) && (sq.answered || []).length > 0 && numSqId !== questionIdToSet
           );
         });
 
   const getAnsweredSampleIds = (answeredQuestions) =>
-        mapObjectArray(answeredQuestions, ([_sqId, aq]) => aq.answered.map((a) => a.sampleId));
+        mapObjectArray(answeredQuestions, ([_sqId, aq]) => (aq.answered || []).map((a) => a.sampleId));
 
-  const checkRuleSumOfAnswers = (surveyRule, questionIdToSet, answerId, answerText) => {
+  const checkRuleSumOfAnswers = (surveyRule, questionIdToSet, answerId, answerText, sampleIds = []) => {
     const answerVal = !isNaN(Number(answerText)) ?
           Number(answerText) : Number(getSurveyAnswerText(questionIdToSet, answerId));
     if (surveyRule.questionIds.includes(questionIdToSet)) {
       const answeredQuestions = getAnsweredQuestions(surveyRule.questionIds, questionIdToSet);
       if (surveyRule.questionIds.length === lengthObject(answeredQuestions) + 1) {
-        const sampleIds = selectedSampleIds;
-        // const sampleIds = getSelectedSampleIds(questionIdToSet);
         const answeredSampleIds = getAnsweredSampleIds(answeredQuestions);
         const commonSampleIds = answeredSampleIds.reduce(intersection, sampleIds);
         if (commonSampleIds.length > 0) {
@@ -590,7 +650,7 @@ export function SurveyQuestions ({
                 .map((sampleId) => sumAnsweredQuestionsPerSample(answeredQuestions, sampleId))
                 .find((s) => s + answerVal !== surveyRule.validSum);
           if (invalidSum || invalidSum === 0) {
-            const { question } = currentProject?.surveyQuestions[questionIdToSet];
+            const { question = "" } = surveyData?.[questionIdToSet] || {};
             return `Sum of answers validation failed.\r\n\nSum for questions [${surveyRule.questionIds
               .map((q) => getSurveyQuestionText(q))
               .toString()}] must be ${surveyRule.validSum.toString()}.\r\n\nAn acceptable answer for "${question}" is ${(
@@ -610,7 +670,7 @@ export function SurveyQuestions ({
     }
   };
 
-  const checkRuleMatchingSums = (surveyRule, questionIdToSet, answerId, answerText) => {
+  const checkRuleMatchingSums = (surveyRule, questionIdToSet, answerId, answerText, sampleIds = []) => {
     const answerVal =
           Number(answerText) || Number(getSurveyAnswerText(questionIdToSet, answerId));
     if (surveyRule.questionIds1.concat(surveyRule.questionIds2).includes(questionIdToSet)) {
@@ -631,8 +691,6 @@ export function SurveyQuestions ({
         ready(ansLen1, ruleLen1, ansLen2, ruleLen2) ||
           ready(ansLen2, ruleLen2, ansLen1, ruleLen1)
       ) {
-        const sampleIds = selectedSampleIds;
-        // const sampleIds = getSelectedSampleIds(questionIdToSet);
         const answeredSampleIds1 = getAnsweredSampleIds(answeredQuestions1);
         const commonSampleIds1 = answeredSampleIds1.reduce(intersection, sampleIds);
         const answeredSampleIds2 = getAnsweredSampleIds(answeredQuestions2);
@@ -649,7 +707,7 @@ export function SurveyQuestions ({
                 })
                 .find((sums) => sums[0] + q1Value !== sums[1] + q2Value);
           if (invalidSum) {
-            const { question } = currentProject?.surveyQuestions[questionIdToSet];
+            const { question = "" } = surveyData?.[questionIdToSet] || {};
             return (
               "Matching sums validation failed.\r\n\n" +
                 `Totals of the question sets [${surveyRule.questionIds1
@@ -675,14 +733,14 @@ export function SurveyQuestions ({
     }
   };
 
-  const checkRuleIncompatibleAnswers = (surveyRule, questionIdToSet, answerId, _answerText) => {
-    if (surveyRule.questionId1 === questionIdToSet && surveyRule.answerId1 === answerId) {
-      const ques2 = currentProject?.surveyQuestions[surveyRule.questionId2];
-      if (ques2.answered.some((ans) => ans.answerId === surveyRule.answerId2)) {
-        const ques1Ids = selectedSampleIds;
-        // const ques1Ids = getSelectedSampleIds(questionIdToSet);
-        const ques2Ids = ques2.answered
-              .filter((ans) => ans.answerId === surveyRule.answerId2)
+  const checkRuleIncompatibleAnswers = (surveyRule, questionIdToSet, answerId, _answerText, sampleIds = []) => {
+    if (surveyRule.questionId1 === questionIdToSet && Number(surveyRule.answerId1) === Number(answerId)) {
+      const ques2 = surveyData?.[surveyRule.questionId2];
+      const ques2Answered = ques2?.answered || [];
+      if (ques2Answered.some((ans) => Number(ans.answerId) === Number(surveyRule.answerId2))) {
+        const ques1Ids = sampleIds;
+        const ques2Ids = ques2Answered
+              .filter((ans) => Number(ans.answerId) === Number(surveyRule.answerId2))
               .map((a) => a.sampleId);
         const commonSampleIds = intersection(ques1Ids, ques2Ids);
         if (commonSampleIds.length > 0) {
@@ -701,14 +759,13 @@ export function SurveyQuestions ({
       } else {
         return null;
       }
-    } else if (surveyRule.questionId2 === questionIdToSet && surveyRule.answerId2 === answerId) {
-      const ques1 = currentProject?.surveyQuestions[surveyRule.questionId1];
-      if (ques1.answered.some((ans) => ans.answerId === surveyRule.answerId1)) {
-        const ques2Ids = selectedSampleIds;
-        // const ques2Ids = getSelectedSampleIds();
-
-        const ques1Ids = ques1.answered
-              .filter((ans) => ans.answerId === surveyRule.answerId1)
+    } else if (surveyRule.questionId2 === questionIdToSet && Number(surveyRule.answerId2) === Number(answerId)) {
+      const ques1 = surveyData?.[surveyRule.questionId1];
+      const ques1Answered = ques1?.answered || [];
+      if (ques1Answered.some((ans) => Number(ans.answerId) === Number(surveyRule.answerId1))) {
+        const ques2Ids = sampleIds;
+        const ques1Ids = ques1Answered
+              .filter((ans) => Number(ans.answerId) === Number(surveyRule.answerId1))
               .map((a) => a.sampleId);
         const commonSampleIds = intersection(ques1Ids, ques2Ids);
         if (commonSampleIds.length > 0) {
@@ -733,23 +790,23 @@ export function SurveyQuestions ({
   };
 
   const formatErrorText = (answerList) =>
-        answerList.map((ans, idx, arr) => `answer "${getSurveyAnswerText(ans[0], ans[1])}" for question "${getSurveyQuestionText(ans[0])}"`);
+        answerList.map((ans) => `answer "${getSurveyAnswerText(ans[0], ans[1])}" for question "${getSurveyQuestionText(ans[0])}"`);
 
   const checkRuleMultipleIncompatibleAnswers = (surveyRule, questionIdToSet, answerId, _answerText) => {
-    const surveyQuestions = currentProject?.surveyQuestions;
+    const surveyQuestionsData = surveyData || {};
     const { answers, incompatQuestionId, incompatAnswerId } = surveyRule;
-    const ruleAnswerList = Object.entries(answers);
+    const ruleAnswerList = Object.entries(answers || {});
 
     const answeredQuestionsList = ruleAnswerList.filter((answer) => {
-      const question = surveyQuestions[answer[0]];
-      return question.answered.some((a) => a.answerId == answer[1]);
+      const question = surveyQuestionsData[answer[0]];
+      return (question?.answered || []).some((a) => a.answerId == answer[1]);
     });
-    const incompatQuestion = surveyQuestions[incompatQuestionId];
-    const incompatAnswer = (incompatQuestion.answered.some((a) => a.answerId == incompatAnswerId) ||
+    const incompatQuestion = surveyQuestionsData[incompatQuestionId];
+    const incompatAnswer = ((incompatQuestion?.answered || []).some((a) => a.answerId == incompatAnswerId) ||
                             (incompatQuestionId == questionIdToSet && incompatAnswerId == answerId));
 
     if (ruleAnswerList.length === answeredQuestionsList.length && incompatAnswer) {
-      const answerText = surveyQuestions[questionIdToSet].answers[answerId].answer;
+      const answerText = surveyQuestionsData[questionIdToSet]?.answers?.[answerId]?.answer ?? "";
       const questionText = getSurveyQuestionText(questionIdToSet);
       const answerTextList = formatErrorText(ruleAnswerList);
       return `Answer "${answerText}" for question "${questionText}" is incompatible in case ${answerTextList} are selected.`;
@@ -758,7 +815,7 @@ export function SurveyQuestions ({
     }
   };
 
-  const rulesViolated = (questionIdToSet, answerId, answerText) => {
+  const rulesViolated = (questionIdToSet, answerId, answerText, sampleIds) => {
     const ruleFunctions = {
       "text-match": checkRuleTextMatch,
       "numeric-range": checkRuleNumericRange,
@@ -767,26 +824,35 @@ export function SurveyQuestions ({
       "incompatible-answers": checkRuleIncompatibleAnswers,
       "multiple-incompatible-answers": checkRuleMultipleIncompatibleAnswers,
     };
+    const rules = currentProject?.surveyRules || surveyData?.surveyRules;
     return (
-      currentProject?.surveyRules &&
-        currentProject?.surveyRules
-        .map((surveyRule) =>
-          ruleFunctions[surveyRule.ruleType](surveyRule, questionIdToSet, answerId, answerText)
-        )
+      Array.isArray(rules) &&
+        rules
+        .map((surveyRule) => {
+          const fn = ruleFunctions[surveyRule.ruleType];
+          return fn ? fn(surveyRule, questionIdToSet, answerId, answerText, sampleIds) : null;
+        })
         .find((msg) => msg)
     );
   };
 
   const validateAndSetCurrentValue = (questionIdToSet, answerId, answerText = null, previousAnswer = null) => {
-    const ruleError = rulesViolated(questionIdToSet, answerId, answerText);
+    const sampleIds = getSelectedSampleIds(questionIdToSet);
+    if (!preview && !checkSelection(sampleIds, questionIdToSet)) return false;
+
+    const ruleError = preview ? null : rulesViolated(questionIdToSet, answerId, answerText, sampleIds);
     if (ruleError) {
-      setCurrentValue(questionIdToSet, answerId, previousAnswer);
+      if (previousAnswer != null && typeof previousAnswer !== "object") {
+        setCurrentValue(questionIdToSet, answerId, previousAnswer, sampleIds);
+      }
       setAppState((s) => ({
         ...s,
         modal: {alert: {alertType: "Collection Error", alertMessage: ruleError}}
       }));
+      return false;
     } else {
-      setCurrentValue(questionIdToSet, answerId, answerText);
+      setCurrentValue(questionIdToSet, answerId, answerText, sampleIds);
+      return true;
     }
   };
 
@@ -800,7 +866,11 @@ export function SurveyQuestions ({
         return selectedSamples.includes(f) ? coll :  [... coll, f];
       }, []);
 
-      setAppState((s)=>({...s, selectedSampleIds: inverted}));
+      setAppState((s) => ({
+        ...s,
+        selectedSampleIds: inverted,
+        selectedSampleId: inverted.length === 1 ? inverted[0] : -1,
+      }));
       // setAppState((s)=>({...s, selectedSampleIds: {... s.selectedSampleIds, [parentId]: inverted}}));
       mercator.selectFeatures(mapConfig, inverted);
     };
@@ -1060,9 +1130,9 @@ export const DrawingTool = () => {
     height: "36px",
     marginRight: "10px",
     borderRadius: "6px",
-    border: `2px solid ${active ? "#2d6f74" : "#c9d6d6"}`,
-    background: active ? "#e6f4f4" : "#fff",
-    color: "#2d6f74",
+    border: `2px solid ${active ? "#72b879" : "rgba(255, 255, 255, 0.16)"}`,
+    background: active ? "rgba(114, 184, 121, 0.22)" : "#0b110d",
+    color: active ? "#9ed999" : "#d4d4d8",
   });
 
   const setDrawTool = (type) => {

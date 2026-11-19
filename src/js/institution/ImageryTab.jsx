@@ -64,7 +64,7 @@ of project visibility`;
           return a.localeCompare(b);
         },
         cell: (row) => (
-          <span style={{ color: "#2f615e", fontWeight: 600 }}>{row.title}</span>
+          <span style={{ color: "#9ed999", fontWeight: 600 }}>{row.title}</span>
         ),
       },
       {
@@ -83,9 +83,9 @@ of project visibility`;
                 row.visibility === "platform" ? null : (
                   <button
                     style={{
-                      border: "1px solid #3D7F7A",
-                      color: "#3D7F7A",
-                      background: "white",
+                      border: "1px solid #72b879",
+                      color: "#9ed999",
+                      background: "rgba(114, 184, 121, 0.12)",
                       borderRadius: "4px",
                       padding: "4px 10px",
                       cursor: "pointer",
@@ -107,9 +107,23 @@ of project visibility`;
   );
 
   const customStyles = {
+    table: {
+      style: {
+        backgroundColor: "#0b110d",
+        color: "#e4e4e7",
+      },
+    },
+    headRow: {
+      style: {
+        backgroundColor: "rgba(114, 184, 121, 0.12)",
+        color: "#9ed999",
+        borderBottomColor: "rgba(114, 184, 121, 0.22)",
+      },
+    },
     headCells: {
       style: {
-        backgroundColor: "#f0f2f1",
+        backgroundColor: "transparent",
+        color: "#9ed999",
         fontWeight: 600,
         fontSize: "0.9rem",
       },
@@ -117,7 +131,20 @@ of project visibility`;
     rows: {
       style: {
         minHeight: "48px",
-        "&:hover": { backgroundColor: "#f7f9f8" },
+        backgroundColor: "#0b110d",
+        color: "#e4e4e7",
+        borderBottomColor: "rgba(255, 255, 255, 0.08)",
+        "&:hover": {
+          backgroundColor: "rgba(114, 184, 121, 0.08)",
+          color: "#ffffff",
+        },
+      },
+    },
+    pagination: {
+      style: {
+        backgroundColor: "#0b110d",
+        color: "#d4d4d8",
+        borderTopColor: "rgba(114, 184, 121, 0.22)",
       },
     },
   };

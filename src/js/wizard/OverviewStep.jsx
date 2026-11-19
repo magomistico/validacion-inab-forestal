@@ -91,7 +91,7 @@ const DataLicenseCard = () => {
                 : <SvgIcon icon="radio" size="1.2rem"/>}</span>
               <span className="text-label" style={{ fontWeight: "bold" }}>{label}</span>
             </div>
-            <p className="text-label-sm" style={{ margin: "0 0 0 1.8rem", color: "#555" }}>
+            <p className="text-label-sm" style={{ margin: "0 0 0 1.8rem", color: "#a1a1aa" }}>
               {description}
             </p>
           </div>
