@@ -77,36 +77,43 @@ export function SurveyQuestions ({
     setScrollToChildrenOf(null);
   }, [scrollToChildrenOf]);
 
+  const getEffectiveVisibleIds = (questionId) => {
+    const q = surveyData?.[questionId];
+    const visibleIds = (q?.visible || []).map((v) => v.id);
+    if (visibleIds.length > 0) return visibleIds;
+
+    if (q && [-1, "-1"].includes(q.parentQuestionId)) {
+      const allFeatureIds = (mercator.getAllFeatures(mapConfig, "currentSamples") || []).map((f) =>
+        f.get("sampleId")
+      );
+      if (allFeatureIds.length > 0) return allFeatureIds;
+      const plotSampleIds = (currentPlot?.samples || []).map((s) => s.id);
+      if (plotSampleIds.length > 0) return plotSampleIds;
+      return Object.keys(userSamples || {}).map(Number).filter((id) => !Number.isNaN(id));
+    }
+
+    return [];
+  };
+
   const getSelectedSampleIds = (questionId) => {
     if (preview) return [selectedSampleId != null && selectedSampleId >= 0 ? selectedSampleId : 1];
 
     const q = surveyData?.[questionId];
-    const visibleIds = (q?.visible || []).map((v) => v.id);
-    const answeredIds = new Set((q?.answered || []).map((a) => a.sampleId));
-    const allFeatures = mercator.getAllFeatures(mapConfig, "currentSamples") || [];
-    const allFeatureIds = allFeatures.map((f) => f.get("sampleId"));
-
-    const effectiveVisibleIds =
-      visibleIds.length > 0
-        ? visibleIds
-        : (q && [-1, "-1"].includes(q.parentQuestionId) ? allFeatureIds : []);
+    const effectiveVisibleIds = getEffectiveVisibleIds(questionId);
+    if (effectiveVisibleIds.length === 0) return [];
 
     if (selectedSampleIds.length > 0) {
       const validSelected = selectedSampleIds.filter((id) => effectiveVisibleIds.includes(id));
-      if (
-        allFeatureIds.length > 1 &&
-        selectedSampleIds.length === allFeatureIds.length &&
-        validSelected.length > 0
-      ) {
+      if (validSelected.length > 0) {
         return validSelected;
       }
-      return selectedSampleIds;
     }
 
     if (effectiveVisibleIds.length === 1 || lengthObject(userSamples) === 1) {
       return effectiveVisibleIds;
     }
 
+    const answeredIds = new Set((q?.answered || []).map((a) => a.sampleId));
     if (answeredIds.size === 0) {
       return effectiveVisibleIds;
     }
@@ -116,19 +123,14 @@ export function SurveyQuestions ({
       return unansweredIds;
     }
 
-    return [];
+    // All visible samples are already answered and none were manually narrowed:
+    // update all visible samples instead of blocking with a Selection Error.
+    return effectiveVisibleIds;
   };
 
   const checkSelection = (sampleIds, questionId) => {
     if (preview) return true;
-    const q = surveyData?.[questionId];
-    const allFeatureIds = (mercator.getAllFeatures(mapConfig, "currentSamples") || []).map((f) =>
-      f.get("sampleId")
-    );
-    const visibleIds =
-      (q?.visible || []).length > 0
-        ? q.visible.map((v) => v.id)
-        : (q && [-1, "-1"].includes(q.parentQuestionId) ? allFeatureIds : []);
+    const visibleIds = getEffectiveVisibleIds(questionId);
     const invalid = sampleIds.filter((id) => !visibleIds.includes(id));
 
     if (invalid.length) {
@@ -857,36 +859,29 @@ export function SurveyQuestions ({
   };
 
   function InvertSelectionButton () {
-    // const parentId = getParent(selectedQuestionId);;
-    // const selectedSamples = selectedSampleIds[parentId] || [];
-    const selectedSamples = selectedSampleIds;
-    const allIds = (mercator.getAllFeatures(mapConfig, "currentSamples") || []).map(f => f.get("sampleId")) ;
-    function invertHandler () {
-      const inverted = allIds.reduce((coll, f) => {
-        return selectedSamples.includes(f) ? coll :  [... coll, f];
-      }, []);
+    const allIds = (mercator.getAllFeatures(mapConfig, "currentSamples") || []).map(f => f.get("sampleId"));
+    if (allIds.length <= 1 || selectedSampleIds.length === 0) {
+      return null;
+    }
 
+    function clearSelectionHandler () {
       setAppState((s) => ({
         ...s,
-        selectedSampleIds: inverted,
-        selectedSampleId: inverted.length === 1 ? inverted[0] : -1,
+        selectedSampleIds: [],
+        selectedSampleId: -1,
       }));
-      // setAppState((s)=>({...s, selectedSampleIds: {... s.selectedSampleIds, [parentId]: inverted}}));
-      mercator.selectFeatures(mapConfig, inverted);
-    };
+      mercator.selectFeatures(mapConfig, []);
+    }
+
     return (
-      <>
-        <button
-          onClick={invertHandler}
-          className={'btn filled'}>
-          {/*(selectedSampleIds[parentId] ?? []).length === allIds.length ? "Clear Selection"
-           : (selectedSampleIds[parentId] ?? []).length ? "Invert Sample Selection"
-           : "Select All Samples"*/
-          selectedSampleIds.length === allIds.length ? "Clear Selection"
-           : selectedSampleIds.length ? "Invert Sample Selection"
-           : "Select All Samples"}
-        </button>
-      </>);
+      <button
+        onClick={clearSelectionHandler}
+        className="btn outline"
+        title="Limpiar la selección manual de muestras"
+      >
+        {`Limpiar selección (${selectedSampleIds.length})`}
+      </button>
+    );
   }
   
   return (
@@ -905,7 +900,7 @@ export function SurveyQuestions ({
     >
       {currentPlot?.flagged ? (
         <>
-          <h2 style={{ color: "red" }}>
+          <h2 style={{ color: "#f87171" }}>
             This plot has been flagged, unflag it to collect data.
           </h2>
           <div className="sq-textarea-wrap">
