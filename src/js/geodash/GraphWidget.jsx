@@ -13,6 +13,7 @@ export default class GraphWidget extends React.Component {
     this.state = {
       graphRef: null,
       chartData: {},
+      errorMsg: null,
     };
   }
 
@@ -65,6 +66,7 @@ export default class GraphWidget extends React.Component {
     const chartData = this.getChartData(this.getChartKey());
 
     if (!this.validArray(chartData)) {
+      this.setState({ errorMsg: null });
       fetch("/geo-dash/gateway-request", {
         method: "POST",
         headers: {
@@ -78,11 +80,12 @@ export default class GraphWidget extends React.Component {
           geometry: plotExtentPolygon,
         }),
       })
-        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((res) => (res.ok ? res.json() : Promise.reject(res)))
         .then((data) => {
           const invalidCheck = this.invalidData(data);
           if (invalidCheck) {
             console.warn(invalidCheck);
+            this.setState({ errorMsg: invalidCheck });
           } else {
             const objChartData = data.timeseries.reduce((acc, cur) => {
               const [time, values] = cur;
@@ -92,10 +95,16 @@ export default class GraphWidget extends React.Component {
                 acc
               );
             }, {});
-            this.setState({ chartData: { ...this.state.chartData, ...objChartData } });
+            this.setState({
+              chartData: { ...this.state.chartData, ...objChartData },
+              errorMsg: null,
+            });
           }
         })
-        .catch((error) => console.error(error));
+        .catch((error) => {
+          console.error(error);
+          this.setState({ errorMsg: "Error al cargar datos de degradación desde GEE." });
+        });
     }
   };
 
@@ -112,6 +121,7 @@ export default class GraphWidget extends React.Component {
   loadTimeSeries = () => {
     const { widget, plotExtentPolygon } = this.props;
     const path = "timeSeriesByIndex";
+    this.setState({ errorMsg: null });
     fetch("/geo-dash/gateway-request", {
       method: "POST",
       headers: {
@@ -125,11 +135,12 @@ export default class GraphWidget extends React.Component {
         scale: this.getScale(widget),
       }),
     })
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
       .then((data) => {
         const invalidCheck = this.invalidData(data);
         if (invalidCheck) {
           console.error(invalidCheck);
+          this.setState({ errorMsg: invalidCheck });
         } else {
           const timeSeries = data.timeseries.filter((v) => v[0]).sort((a, b) => a[0] - b[0]);
           this.setState({
@@ -137,10 +148,14 @@ export default class GraphWidget extends React.Component {
               ...this.state.chartData,
               [this.getChartKey()]: timeSeries,
             },
+            errorMsg: null,
           });
         }
       })
-      .catch((error) => console.log(error));
+      .catch((error) => {
+        console.error(error);
+        this.setState({ errorMsg: "Error al cargar la serie de tiempo desde GEE." });
+      });
   };
 
   /// Helpers
@@ -260,7 +275,10 @@ export default class GraphWidget extends React.Component {
 
   render() {
     const { widget } = this.props;
+    const { errorMsg } = this.state;
     const chartKey = this.getChartKey();
+    const retryFn =
+      widget.type === "degradationTool" ? this.loadDegradation : this.loadTimeSeries;
     return (
       <div
         id={"widget-graph_" + widget.id}
@@ -270,6 +288,7 @@ export default class GraphWidget extends React.Component {
           justifyContent: "center",
           display: "flex",
           minHeight: 0,
+          padding: errorMsg ? "1rem" : 0,
         }}
       >
         {this.validArray(this.getChartData(chartKey)) ? (
@@ -279,6 +298,17 @@ export default class GraphWidget extends React.Component {
             highcharts={Highcharts}
             options={this.getChartOptions(chartKey)}
           />
+        ) : errorMsg ? (
+          <div style={{ color: "#fecaca", fontSize: "0.85rem", textAlign: "center" }}>
+            <p style={{ marginBottom: "0.6rem" }}>{errorMsg}</p>
+            <button
+              className="geodash-map-error-retry"
+              onClick={retryFn}
+              type="button"
+            >
+              Reintentar
+            </button>
+          </div>
         ) : (
           <img alt="Loading" src="img/geodash/ceo-loading.gif" />
         )}

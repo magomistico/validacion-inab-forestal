@@ -10,12 +10,95 @@ from gee.inputs import getLandsat, getS1, getLandsatToa, getTFO, getSentinel2Toa
 
 ########## Helper functions ##########
 
+_LAST_INIT_ERROR = ''
+
+
+def _credentials_dirs():
+    dirs = []
+    home_dir = os.path.expanduser('~')
+    if home_dir:
+        dirs.append(os.path.join(home_dir, '.config', 'earthengine'))
+    root_dir = '/root/.config/earthengine'
+    if root_dir not in dirs:
+        dirs.append(root_dir)
+    return dirs
+
+
+def _read_json_field(file_path, keys):
+    if not file_path or not os.path.exists(file_path):
+        return None
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            for key in keys:
+                val = data.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_ee_project(project=None, sa_key=''):
+    if isinstance(project, str) and project.strip():
+        return project.strip()
+
+    for env_key in ('EE_PROJECT', 'GEE_PROJECT', 'GOOGLE_CLOUD_PROJECT', 'GCLOUD_PROJECT'):
+        env_val = os.environ.get(env_key, '').strip()
+        if env_val:
+            return env_val
+
+    sa_project = _read_json_field(sa_key, ('project_id', 'project'))
+    if sa_project:
+        return sa_project
+
+    for cred_dir in _credentials_dirs():
+        cred_project = _read_json_field(
+            os.path.join(cred_dir, 'credentials'),
+            ('project', 'quota_project_id', 'project_id'),
+        )
+        if cred_project:
+            return cred_project
+
+    for cred_dir in _credentials_dirs():
+        cached_path = os.path.join(cred_dir, 'inab_default_project')
+        if os.path.exists(cached_path):
+            try:
+                with open(cached_path, 'r', encoding='utf-8') as f:
+                    cached = f.read().strip()
+                if cached:
+                    return cached
+            except Exception:
+                pass
+
+    return None
+
+
+def save_default_project(project):
+    if not isinstance(project, str):
+        return
+    clean_proj = project.strip()
+    if not clean_proj or clean_proj.upper() == 'AREA2':
+        return
+    for cred_dir in _credentials_dirs():
+        if os.path.isdir(cred_dir):
+            try:
+                with open(os.path.join(cred_dir, 'inab_default_project'), 'w', encoding='utf-8') as f:
+                    f.write(clean_proj)
+                return
+            except Exception:
+                pass
+
 
 def initialize(ee_account='', ee_key_path='', project=None):
+    global _LAST_INIT_ERROR
     try:
         sa_key = ee_key_path or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
         if not sa_key and os.path.exists('/app/ee-key.json'):
             sa_key = '/app/ee-key.json'
+
+        resolved_project = _resolve_ee_project(project=project, sa_key=sa_key)
 
         if sa_key and os.path.exists(sa_key):
             try:
@@ -23,25 +106,124 @@ def initialize(ee_account='', ee_key_path='', project=None):
                     credentials = ee.ServiceAccountCredentials(ee_account, sa_key)
                 else:
                     credentials = ee.ServiceAccountCredentials.from_json_file(sa_key)
-                if project:
-                    ee.Initialize(credentials, project=project)
+                if resolved_project:
+                    ee.Initialize(credentials, project=resolved_project)
                 else:
                     ee.Initialize(credentials)
-                print(f"[INFO] GEE Inicializado con Service Account ({sa_key})")
+                _LAST_INIT_ERROR = ''
+                save_default_project(resolved_project)
+                print(f"[INFO] GEE Inicializado con Service Account ({sa_key}, project={resolved_project or 'default'})")
                 return True
             except Exception as sa_err:
                 print(f"[WARN] Error inicializando SA {sa_key}: {sa_err}")
 
         kwargs = {}
-        if project:
-            kwargs['project'] = project
+        if resolved_project:
+            kwargs['project'] = resolved_project
         ee.Initialize(**kwargs)
-        print(f"[INFO] GEE Inicializado exitosamente (project={project or 'default'})")
+        _LAST_INIT_ERROR = ''
+        save_default_project(resolved_project)
+        print(f"[INFO] GEE Inicializado exitosamente (project={resolved_project or 'default'})")
         return True
     except Exception as e:
+        _LAST_INIT_ERROR = str(e)
         print(f"[WARN] Error en ee.Initialize: {e}")
         return False
 
+
+def ensure_initialized(project=None):
+    if project:
+        if initialize(project=project):
+            return True
+    else:
+        has_creds = getattr(ee.data, '_credentials', None) is not None
+        active_proj = getattr(ee.data, '_cloud_api_user_project', None)
+        if has_creds and (not active_proj or str(active_proj).upper() != 'AREA2'):
+            return True
+        if initialize():
+            return True
+        if has_creds:
+            return True
+
+    err_lower = (_LAST_INIT_ERROR or '').lower()
+    if 'no project found' in err_lower or 'project' in err_lower and 'not' in err_lower:
+        raise EEException(
+            "Google Earth Engine requiere un proyecto de Cloud por defecto. "
+            "Ejecuta en el servidor: sudo docker compose exec -it app earthengine set_project TU_PROYECTO_GEE"
+        )
+    if 'authorize' in err_lower or 'credentials' in err_lower or 'not found' in err_lower:
+        raise EEException(
+            "Google Earth Engine no está autenticado en el servidor. "
+            "Ejecuta: sudo docker compose exec -it app earthengine authenticate --auth_mode=notebook "
+            "y luego: sudo docker compose exec -it app earthengine set_project TU_PROYECTO_GEE"
+        )
+    raise EEException(
+        f"No se pudo inicializar Google Earth Engine: {_LAST_INIT_ERROR or 'verifica credenciales y proyecto GEE.'}"
+    )
+
+
+def _parse_numeric_vis_param(val):
+    if isinstance(val, (int, float)):
+        return val
+    if isinstance(val, (list, tuple)):
+        parsed = []
+        for item in val:
+            if item is None or str(item).strip() == '':
+                continue
+            parsed.append(float(item))
+        if not parsed:
+            return None
+        return parsed[0] if len(parsed) == 1 else parsed
+    if isinstance(val, str):
+        parts = [p.strip() for p in val.split(',') if p.strip() != '']
+        if not parts:
+            return None
+        nums = [float(p) for p in parts]
+        return nums[0] if len(nums) == 1 else nums
+    return val
+
+
+def normalizeVisParams(visParams):
+    if not isinstance(visParams, dict):
+        return {}
+    normalized = dict(visParams)
+
+    if 'bands' in normalized:
+        bands = normalized['bands']
+        if isinstance(bands, str):
+            band_list = [b.strip() for b in bands.split(',') if b.strip()]
+            if band_list:
+                normalized['bands'] = band_list
+            else:
+                normalized.pop('bands', None)
+        elif isinstance(bands, (list, tuple)):
+            band_list = [str(b).strip() for b in bands if str(b).strip()]
+            if band_list:
+                normalized['bands'] = band_list
+            else:
+                normalized.pop('bands', None)
+
+    for num_key in ('min', 'max', 'gamma', 'gain', 'bias'):
+        if num_key in normalized:
+            try:
+                parsed = _parse_numeric_vis_param(normalized[num_key])
+                if parsed is None:
+                    normalized.pop(num_key, None)
+                else:
+                    normalized[num_key] = parsed
+            except (TypeError, ValueError):
+                pass
+
+    if 'palette' in normalized:
+        palette = normalized['palette']
+        if isinstance(palette, str):
+            colors = [c.strip() for c in palette.split(',') if c.strip()]
+            if colors:
+                normalized['palette'] = colors
+            else:
+                normalized.pop('palette', None)
+
+    return normalized
 
 
 def getReducer(reducer):
@@ -99,9 +281,10 @@ def safeParseJSON(val):
 
 def validateJSON(image, params):
     try:
+        ensure_initialized()
         dummy_img = ee.Image(image)
         if params:
-            visd_img = dummy_img.visualize(**params)
+            visd_img = dummy_img.visualize(**normalizeVisParams(params))
             vis_info = visd_img.getInfo()
         return None
     except Exception as e:
@@ -163,7 +346,7 @@ def listAvailableBands(name, assetType):
 
 def imageToMapId(image, visParams):
     eeImage = ee.Image(image)
-    mapId = eeImage.getMapId(visParams)
+    mapId = eeImage.getMapId(normalizeVisParams(visParams))
     # TODO, just return URL so the routes are easier to deduce whats being returned.
     return {
         'url': mapId['tile_fetcher'].url_format
@@ -228,7 +411,7 @@ def firstCloudFreeImageInMosaicToMapId(assetId, visParams, startDate, endDate):
 def getFeatureCollectionTileUrl(featureCollection, field, matchID, visParams):
     fc = ee.FeatureCollection(featureCollection)
     single = fc.filter(ee.Filter.equals(field, matchID))
-    mapId = ee.Image().paint(single, 0, 2).getMapId(visParams)
+    mapId = ee.Image().paint(single, 0, 2).getMapId(normalizeVisParams(visParams))
     return mapId['tile_fetcher'].url_format
 
 ########## Pre defined ee.ImageCollection ##########
@@ -290,11 +473,12 @@ def filteredImageNDWIToMapId(startDate, endDate, source):
 
 def filteredCollectionBySourceName(startDate, endDate, source):
     collection = None
-    if source == 'landsat':
+    lower_source = (source or '').lower()
+    if lower_source == 'landsat':
         collection = getLandsatToa(**{'startDate':startDate, 'endDate':endDate})
-    elif source == 'sentinel2':
+    elif lower_source in ('sentinel2', 'sentinel-2'):
         collection =  getSentinel2Toa({'start':startDate, 'end':endDate})
-    elif source == 'TFO':
+    elif lower_source == 'tfo':
         collection = getTFO({'start':startDate, 'end':endDate})
     
     return collection
@@ -316,12 +500,10 @@ def filteredImageByIndexToMapId(startDate, endDate, index, source):
 
 def filteredImageCompositeToMapId(eeCollection, visParams, metadataCloudCoverMax):
     # todo: rename, this is only used for landsat
-    eeCollection = eeCollection.filterMetadata(
-        'CLOUD_COVER',
-        'less_than',
-        int(metadataCloudCoverMax)
-        )
-    eeMosaicImage = medoid(eeCollection,  ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2'])
+    eeCollection = eeCollection.filter(
+        ee.Filter.lt('CLOUD_COVER', float(metadataCloudCoverMax))
+    )
+    eeMosaicImage = medoid(eeCollection, ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2'])
 
     return imageToMapId(eeMosaicImage, visParams)
 
@@ -339,8 +521,8 @@ def filteredSentinelComposite(visParams, startDate, endDate, metadataCloudCoverM
         return rescale.addBands(score)
 
     sentinel2 = ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
-    f2017s2 = sentinel2.filterDate(startDate, endDate).filterMetadata(
-        'CLOUDY_PIXEL_PERCENTAGE', 'less_than', int(metadataCloudCoverMax))
+    f2017s2 = sentinel2.filterDate(startDate, endDate).filter(
+        ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', float(metadataCloudCoverMax)))
     m2017s2 = f2017s2.map(scaleAndCloudScore)
     m2017s3 = m2017s2.qualityMosaic('cloudscore')
     return imageToMapId(m2017s3, visParams)
@@ -402,18 +584,19 @@ def cloudScoreSentinel2(img):
 
 
 def medoid(collection, distance_bands):
+    median_img = collection.select(distance_bands).median()
+
     def prepareMedoid(image):
-        return (image.addBands(image.expression(
-            'pow(image - median, 2)', {
-                'image':image.select(distance_bands),
-                'median': collection.select(distance_bands).median()
-                })
+        diff = image.select(distance_bands).subtract(median_img)
+        distance = (
+            diff.pow(2)
             .reduce(ee.Reducer.sum())
             .sqrt()
             .multiply(-1)
             .rename('distanceToMedian')
-            )
         )
+        return image.addBands(distance)
+
     return collection.map(prepareMedoid).qualityMosaic('distanceToMedian')
 
     

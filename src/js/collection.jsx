@@ -678,7 +678,9 @@ function Collection ({ projectId, acceptTOS, plotId, userEmail }) {
         `&plotShape=${
           currentPlot.plotGeom.includes("Point") ? currentProject.plotShape : "polygon"
         }` +
-        `&center=${currentPlot.plotGeom.includes("Point") ? currentPlot.plotGeom : ""}` +
+        `&center=${
+          currentPlot.plotGeom.includes("Point") ? encodeURIComponent(currentPlot.plotGeom) : ""
+        }` +
         `&radius=${plotRadius}`,
       `_geo-dash_${projectId}`
     );

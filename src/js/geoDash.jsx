@@ -31,9 +31,10 @@ class Geodash extends React.Component {
       initCenter: null,
       initZoom: null,
       vectorSource: null,
-      toggleSamples: Boolean(props.plotSamples),
-      modal: null
+      toggleSamples: props.plotSamples === true || props.plotSamples === "true",
+      modal: null,
     };
+    this.plotJsonObject = null;
   }
 
   /// Lifecycle
@@ -44,61 +45,128 @@ class Geodash extends React.Component {
       this.getWidgetsByProjectId(),
       this.getVectorSource(),
     ])
-      .then((data) =>
-        this.setState({ imageryList: data[0], widgets: data[1], vectorSource: data[2] })
+      .then(([imageryList, widgets, vectorSource]) =>
+        this.setState({ imageryList, widgets, vectorSource })
       )
       .catch((response) => {
-        console.log(response);
-        this.setState({modal: {alert: {alertType: "GeoDash Alert",
-                                       alertMessage: "Error initializing Geo-Dash. See console for details."}}});
+        console.error("Error initializing Geo-Dash:", response);
+        const detail =
+          response && response.status
+            ? ` (HTTP ${response.status})`
+            : response && response.message
+            ? `: ${response.message}`
+            : "";
+        this.setState({
+          widgets: [],
+          modal: {
+            alert: {
+              alertType: "GeoDash Alert",
+              alertMessage: `Error initializing Geo-Dash${detail}. See console for details.`,
+            },
+          },
+        });
       });
   }
 
-  
-
   /// API
 
-  getInstitutionImagery = () =>
-  fetch(`/get-institution-imagery?institutionId=${this.props.institutionId}`).then((response) =>
-    response.ok ? response.json() : Promise.reject(response)
-  );
+  getDefaultImageryFallback = () => [
+    {
+      id: -1,
+      title: "OpenStreetMap",
+      attribution: "OpenStreetMap contributors",
+      isProxied: false,
+      sourceConfig: { type: "OSM" },
+    },
+  ];
+
+  getInstitutionImagery = async () => {
+    const instId = parseInt(this.props.institutionId, 10);
+    if (Number.isInteger(instId) && instId > 0) {
+      try {
+        const response = await fetch(`/get-institution-imagery?institutionId=${instId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data) && data.length > 0) return data;
+        }
+      } catch (err) {
+        console.warn("Could not load institution imagery, falling back to public imagery:", err);
+      }
+    }
+    try {
+      const publicRes = await fetch("/get-public-imagery");
+      if (publicRes.ok) {
+        const publicData = await publicRes.json();
+        if (Array.isArray(publicData) && publicData.length > 0) return publicData;
+      }
+    } catch (err) {
+      console.warn("Could not load public imagery, falling back to OpenStreetMap:", err);
+    }
+    return this.getDefaultImageryFallback();
+  };
 
   getWidgetsByProjectId = () =>
-  fetch(`/geo-dash/get-project-widgets?projectId=${this.props.projectId}`).then((response) =>
-    response.ok ? response.json() : Promise.reject(response)
-  );
-
-  getFeatures = async () => {
-    const { plotShape, radius, center, plotId } = this.props;
-    const {toggleSamples} = this.state;
-    const plotJsonObject = await fetch(`/get-plot-sample-geom?plotId=${plotId}`).then(
-      (response) => (response.ok ? response.json() : Promise.reject(response))
+    fetch(`/geo-dash/get-project-widgets?projectId=${this.props.projectId}`).then((response) =>
+      response.ok ? response.json() : Promise.reject(response)
     );
 
-    const samples = toggleSamples ?
-          (plotJsonObject.sampleGeoms || [])
-	  .filter ((e) => e)
-	  .map ((geom)=>
-	    new Feature (
-	      new Circle (
-		projTransform (JSON.parse(geom).coordinates, "EPSG:4326", "EPSG:3857"),
-		Number(1))))
-          : [];
-    
-    const polygonFeatures = () => {
-      return [plotJsonObject.plotGeom, ...(plotJsonObject.sampleGeoms || [])]
-        .filter((e) => e)
-        .map((geom) => new Feature({ geometry: mercator.parseGeoJson(geom, true) }));
-    };
-    
-    const squareFeatures = () => {
+  parseGeoJsonSafe = (raw) => {
+    if (!raw) return null;
+    if (typeof raw === "object") return raw;
+    try {
+      return JSON.parse(raw);
+    } catch (_err) {
+      try {
+        return JSON.parse(decodeURIComponent(raw));
+      } catch (_err2) {
+        return null;
+      }
+    }
+  };
+
+  buildSampleFeature = (geom) => {
+    const parsed = this.parseGeoJsonSafe(geom);
+    if (!parsed) return null;
+    try {
+      if (
+        parsed.type === "Point" &&
+        Array.isArray(parsed.coordinates) &&
+        parsed.coordinates.length >= 2 &&
+        Number.isFinite(Number(parsed.coordinates[0])) &&
+        Number.isFinite(Number(parsed.coordinates[1]))
+      ) {
+        return new Feature(
+          new Circle(projTransform(parsed.coordinates, "EPSG:4326", "EPSG:3857"), Number(1.5))
+        );
+      }
+      return new Feature({ geometry: mercator.parseGeoJson(JSON.stringify(parsed), true) });
+    } catch (err) {
+      console.warn("Skipping invalid sample geometry in Geo-Dash:", err);
+      return null;
+    }
+  };
+
+  buildFeatures = (plotJsonObject, showSamples) => {
+    const { plotShape, radius, center } = this.props;
+    const safePlot = plotJsonObject && typeof plotJsonObject === "object" ? plotJsonObject : {};
+    const parsedCenter = this.parseGeoJsonSafe(center);
+    const hasValidCenter =
+      parsedCenter &&
+      Array.isArray(parsedCenter.coordinates) &&
+      parsedCenter.coordinates.length >= 2 &&
+      Number.isFinite(Number(parsedCenter.coordinates[0])) &&
+      Number.isFinite(Number(parsedCenter.coordinates[1]));
+    const numRadius = Number(radius);
+    const hasValidRadius = Number.isFinite(numRadius) && numRadius > 0;
+
+    const plotFeatures = [];
+
+    if (plotShape === "square" && hasValidCenter && hasValidRadius) {
       const point = new Point(
-        projTransform(JSON.parse(center).coordinates, "EPSG:4326", "EPSG:3857")
+        projTransform(parsedCenter.coordinates, "EPSG:4326", "EPSG:3857")
       );
-      const pointCenter = point.getFlatCoordinates();
-      const [centerX, centerY] = pointCenter;
-      const numRadius = Number(radius);
-      return [
+      const [centerX, centerY] = point.getFlatCoordinates();
+      plotFeatures.push(
         new Feature(
           fromExtent([
             centerX - numRadius,
@@ -106,32 +174,54 @@ class Geodash extends React.Component {
             centerX + numRadius,
             centerY + numRadius,
           ])
-        ),
-      ];
-    };
-    
-    const circleFeatures = () => {
-      return [
+        )
+      );
+    } else if (plotShape === "circle" && hasValidCenter && hasValidRadius) {
+      plotFeatures.push(
         new Feature(
           new Circle(
-            projTransform(JSON.parse(center).coordinates, "EPSG:4326", "EPSG:3857"),
-            Number(radius)
+            projTransform(parsedCenter.coordinates, "EPSG:4326", "EPSG:3857"),
+            numRadius
           )
         )
-      ];
-    };
-    
-    return [
-      ...((plotShape === "polygon") ? polygonFeatures() : []),
-      ...((plotShape === "square")  ? squareFeatures() : []),
-      ...((plotShape === "circle")  ? circleFeatures() : []),
-      ... (this.state.toggleSamples ? samples : [])
-    ];
+      );
+    } else if (safePlot.plotGeom) {
+      try {
+        plotFeatures.push(
+          new Feature({ geometry: mercator.parseGeoJson(safePlot.plotGeom, true) })
+        );
+      } catch (err) {
+        console.warn("Could not parse plotGeom in Geo-Dash:", err);
+      }
+    }
+
+    const sampleFeatures = showSamples
+      ? (safePlot.sampleGeoms || [])
+          .filter((e) => e)
+          .map((geom) => this.buildSampleFeature(geom))
+          .filter((f) => f)
+      : [];
+
+    return [...plotFeatures, ...sampleFeatures];
   };
 
-  getVectorSource = async () => 
-  new Vector({ features: await this.getFeatures() });
+  getFeatures = async () => {
+    const { plotId } = this.props;
+    let plotJsonObject = {};
+    const parsedPlotId = parseInt(plotId, 10);
+    if (Number.isInteger(parsedPlotId) && parsedPlotId > 0) {
+      const response = await fetch(`/get-plot-sample-geom?plotId=${parsedPlotId}`);
+      if (!response.ok) {
+        return Promise.reject(response);
+      }
+      const data = await response.json();
+      plotJsonObject = data && typeof data === "object" ? data : {};
+    }
+    this.plotJsonObject = plotJsonObject;
+    return this.buildFeatures(plotJsonObject, this.state.toggleSamples);
+  };
 
+  getVectorSource = async () => new Vector({ features: await this.getFeatures() });
 
   /// State
 
@@ -160,7 +250,25 @@ class Geodash extends React.Component {
   /// Helpers
 
   extentToPolygon = (extent) => {
-    const extentArray = JSON.parse(decodeURI(extent));
+    const fallback = [
+      [-92.25, 13.73],
+      [-88.22, 13.73],
+      [-88.22, 17.82],
+      [-92.25, 17.82],
+      [-92.25, 13.73],
+    ];
+    if (!extent) return fallback;
+    let extentArray = null;
+    try {
+      extentArray = JSON.parse(decodeURIComponent(extent));
+    } catch (_err) {
+      try {
+        extentArray = JSON.parse(decodeURI(extent));
+      } catch (_err2) {
+        return fallback;
+      }
+    }
+    if (!Array.isArray(extentArray) || extentArray.length < 4) return fallback;
     return [
       [extentArray[0], extentArray[1]],
       [extentArray[2], extentArray[1]],
@@ -170,34 +278,48 @@ class Geodash extends React.Component {
     ];
   };
 
-  
   togglePlotSamples = () => {
-    window.open(
-      "/geo-dash?" +
-        `institutionId=${this.props.institution}` +
-        `&projectId=${this.props.projectId}` +
-        `&visiblePlotId=${this.props.visiblePlotId}` +
-        `&plotId=${this.props.plotId}` +
-        `&plotExtent=${this.props.plotExtent}` +
-        (this.props.plotSamples ? '' : '&plotSamples=${true}') +
-        `&plotShape=${this.props.plotShape}` +
-        `&center=${this.props.center}` +
-        `&radius=${this.props.radius}`,
-      `_geo-dash_${this.props.projectId}`);
+    const nextToggle = !this.state.toggleSamples;
+    const { vectorSource } = this.state;
+    if (vectorSource && this.plotJsonObject) {
+      const updatedFeatures = this.buildFeatures(this.plotJsonObject, nextToggle);
+      vectorSource.clear(true);
+      vectorSource.addFeatures(updatedFeatures);
+    }
+    try {
+      const url = new URL(window.location.href);
+      if (this.props.institutionId && !url.searchParams.get("institutionId")) {
+        url.searchParams.set("institutionId", this.props.institutionId);
+      }
+      if (nextToggle) {
+        url.searchParams.set("plotSamples", "true");
+      } else {
+        url.searchParams.delete("plotSamples");
+      }
+      window.history.replaceState({}, "", url.toString());
+    } catch (_err) {
+      // Ignore history errors in restricted environments
+    }
+    this.setState({ toggleSamples: nextToggle });
+  };
 
-  } 
   /// Render
 
   render() {
-    const { widgets, toggleSamples} = this.state;
+    const { widgets, toggleSamples } = this.state;
 
     return (
       <React.Fragment>
-        {this.state.modal?.alert &&
-         (<Modal title={this.state.modal.alert.alertType}
-                 onClose={()=>{this.setState({modal: null});}}>
+        {this.state.modal?.alert && (
+          <Modal
+            title={this.state.modal.alert.alertType}
+            onClose={() => {
+              this.setState({ modal: null });
+            }}
+          >
             {this.state.modal.alert.alertMessage}
-          </Modal>)}
+          </Modal>
+        )}
         <button
           style={{
             margin: "0.8rem 1.5rem",
@@ -205,11 +327,13 @@ class Geodash extends React.Component {
             fontSize: "0.84rem",
             borderRadius: "8px",
           }}
-          className={toggleSamples ? "btn outline" : "btn filled"} 
+          className={toggleSamples ? "btn outline" : "btn filled"}
           onClick={this.togglePlotSamples}
           type="button"
         >
-          {this.state.toggleSamples ? "Ocultar Muestras de la Parcela" : "Mostrar Muestras de la Parcela"}
+          {this.state.toggleSamples
+            ? "Ocultar Muestras de la Parcela"
+            : "Mostrar Muestras de la Parcela"}
         </button>
         <div
           style={{
@@ -221,7 +345,6 @@ class Geodash extends React.Component {
             gap: ".75rem",
           }}
         >
-
           {widgets === null ? (
             <div
               style={{
@@ -243,7 +366,7 @@ class Geodash extends React.Component {
                 key={widget.id}
                 idx={idx}
                 imageryList={this.state.imageryList}
-                initCenter={this.mapCenter}
+                initCenter={this.state.initCenter}
                 mapCenter={this.state.mapCenter}
                 mapZoom={this.state.mapZoom}
                 plotExtentPolygon={this.extentToPolygon(this.props.plotExtent)}

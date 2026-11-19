@@ -23,9 +23,8 @@ export default function GDInput({
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         type="text"
-        value={getWidgetDesign(dataKey, prefixPath)}
+        value={getWidgetDesign(dataKey, prefixPath) ?? ""}
         className="form-control"
-        required
       />
     </div>
   );

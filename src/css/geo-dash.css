@@ -62,6 +62,90 @@
   font-weight: 600;
   position: relative;
 }
+.geodash-widget-actions {
+  position: relative;
+  z-index: 20;
+}
+.geodash-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #e4f5e4;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.geodash-action-btn:hover,
+.geodash-action-btn:focus {
+  background-color: rgba(16, 185, 129, 0.22);
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #ffffff;
+  outline: none;
+}
+.geodash-action-btn-danger:hover,
+.geodash-action-btn-danger:focus {
+  background-color: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fecaca;
+}
+.geodash-map-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+.geodash-map-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 20;
+  background: rgba(10, 16, 12, 0.88);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #a7f3d0;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+.geodash-map-error {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 25;
+  background: rgba(24, 10, 10, 0.94);
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  color: #fecaca;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.geodash-map-error-retry {
+  flex-shrink: 0;
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(248, 113, 113, 0.6);
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.geodash-map-error-retry:hover {
+  background: rgba(239, 68, 68, 0.45);
+}
 
 /*
  * Fill Screen Widget

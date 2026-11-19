@@ -47,23 +47,23 @@
       (when (stale?)
         (try
           (let [{:keys [ee-account ee-key-path]} (get-config :py-interop)
-                init-fn (ns-resolve 'gee.utils (symbol "initialize"))]
-            (when init-fn
-              (init-fn ee-account ee-key-path))
-            (reset! last-initialized (System/currentTimeMillis)))
+                init-fn (ns-resolve 'gee.utils (symbol "initialize"))
+                ok?     (when init-fn
+                          (init-fn ee-account ee-key-path))]
+            (when ok?
+              (reset! last-initialized (System/currentTimeMillis))))
           (catch Throwable t
             (println "[WARN] Error al inicializar credenciales GEE:" (.getMessage t))))))))
 
 (defn- parse-py-errors [e]
-  (let [error-parts (as-> e %
-                      (ex-message %)
-                      (str/split % #"\n")
-                      (last %)
-                      (str/split % #": "))]
-    {:errType  (first error-parts)
-     :errMsg   (->> error-parts
-                    (rest)
-                    (str/join ": "))}))
+  (let [full-msg    (or (ex-message e) (.getMessage e) (str e))
+        _           (println "[WARN] GeoDash GEE error:" full-msg)
+        last-line   (-> full-msg (str/split #"\n") last str/trim)
+        error-parts (str/split last-line #": " 2)
+        err-type    (if (> (count error-parts) 1) (first error-parts) "GEEError")
+        err-msg     (if (> (count error-parts) 1) (second error-parts) last-line)]
+    {:errType err-type
+     :errMsg  (if (str/blank? err-msg) full-msg err-msg)}))
 
 (def ^:private valid-gee-paths
   #{"degradationTimeSeries"
@@ -104,18 +104,25 @@
         (data-response {:errMsg (str "No GEE function defined for path " path-name ".")})))))
 
 (defn validate-vis-params [{:keys [params]}]
-  (check-initialized)
-  (if-not @python-available?
-    (data-response {:errMsg (str "El servicio de GeoDash/Python no está disponible: " @python-init-error)})
-    (if-let [validate-fn (ns-resolve 'gee.utils (symbol "validateJSON"))]
-      (try
-        (let [img-path    (:imgPath params)
-              vis-params  (tc/json->clj (:visParams params))
-              _vis-errors (validate-fn img-path vis-params)]
-          (data-response "" {:status 200}))
-        (catch Exception e
-          (data-response (parse-py-errors e) {:status 400})))
-      (data-response "" {:status 200}))))
+  (let [img-path       (:imgPath params)
+        raw-vis-params (:visParams params)]
+    (if (or (str/blank? img-path)
+            (= img-path "undefined")
+            (str/blank? raw-vis-params)
+            (= raw-vis-params "undefined"))
+      (data-response "" {:status 200})
+      (do
+        (check-initialized)
+        (if-not @python-available?
+          (data-response {:errMsg (str "El servicio de GeoDash/Python no está disponible: " @python-init-error)})
+          (if-let [validate-fn (ns-resolve 'gee.utils (symbol "validateJSON"))]
+            (try
+              (let [vis-params (tc/json->clj raw-vis-params)
+                    vis-errors (validate-fn img-path vis-params)]
+                (data-response (or vis-errors "") {:status 200}))
+              (catch Exception e
+                (data-response (parse-py-errors e) {:status 400})))
+            (data-response "" {:status 200})))))))
 
 ;;; Widget Routes
 

@@ -265,7 +265,7 @@ class WidgetLayoutEditor extends React.PureComponent {
       ...(widgetDesign.hasOwnProperty("basemapId") && {
         basemapId:
           _.get(last(widgets.filter((w) => w.hasOwnProperty("basemapId"))), "basemapId") ||
-          imagery[0].id ||
+          imagery[0]?.id ||
           "-1",
       }),
     };
@@ -324,19 +324,42 @@ class WidgetLayoutEditor extends React.PureComponent {
   getWidgetErrors = async () => {
     const { title, widgetDesign } = this.state;
     const { assetId, visParams } = widgetDesign;
-    const validateJSONRequest = await fetch(`/geo-dash/validate-vis-params?imgPath=${assetId}&visParams=${visParams}`);
-    const validateJSONResponse = await validateJSONRequest.json();
-    this.closeDialogs();
+    const hasVisParams = widgetDesign.hasOwnProperty("visParams");
+    const hasAssetId = widgetDesign.hasOwnProperty("assetId");
+    const visParamsValid = !hasVisParams || !visParams || isValidJSON(visParams);
+
+    let validateJSONError = null;
+    if (hasAssetId && assetId && hasVisParams && visParams && visParamsValid) {
+      try {
+        const validateJSONRequest = await fetch(
+          `/geo-dash/validate-vis-params?imgPath=${encodeURIComponent(
+            assetId
+          )}&visParams=${encodeURIComponent(visParams)}`
+        );
+        const validateJSONResponse = await validateJSONRequest.json();
+        if (validateJSONResponse) {
+          if (typeof validateJSONResponse === "string") {
+            validateJSONError = validateJSONResponse;
+          } else if (validateJSONResponse.errMsg) {
+            validateJSONError = validateJSONResponse.errMsg;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not validate visParams:", err);
+      }
+    }
+
     return [
-      !title.length && "You must add a title for the widget.",
-      validateJSONResponse,
-      widgetDesign.hasOwnProperty("visParams") &&
-        !isValidJSON(widgetDesign.visParams) &&
+      !title.trim().length && "You must add a title for the widget.",
+      validateJSONError,
+      hasVisParams &&
+        visParams &&
+        !visParamsValid &&
         "You have entered invalid JSON for Image Parameters",
-      widgetDesign.hasOwnProperty("assetId") && !widgetDesign.assetId && "Asset ID is required.",
+      hasAssetId && !assetId && "Asset ID is required.",
     ].filter((e) => e);
   };
-  
+
   buildNewWidget = () => {
     const { title, type, widgetDesign, basemapTFODate } = this.state;
     return {
@@ -346,11 +369,13 @@ class WidgetLayoutEditor extends React.PureComponent {
       ...widgetDesign,
     };
   };
-  
+
   createNewWidget = async () => {
     const errors = await this.getWidgetErrors();
     if (errors.length) {
-      this.setState ({modal: {alert: {alertType: "Widget Creation Error", alertMessage: errors.join("\n\n")}}});    
+      this.setState({
+        modal: { alert: { alertType: "Widget Creation Error", alertMessage: errors.join("\n\n") } },
+      });
     } else {
       this.widgetAPIWrapper("create-widget", {
         layout: this.getNextLayout(),
@@ -362,9 +387,11 @@ class WidgetLayoutEditor extends React.PureComponent {
   };
 
   copyWidget = (existingWidget) => {
+    // eslint-disable-next-line no-unused-vars
+    const { id: _id, ...widgetWithoutId } = existingWidget;
     const newWidget = {
-      ...existingWidget,
-      layout: this.getNextLayout(existingWidget.layout.w, existingWidget.layout.h),
+      ...widgetWithoutId,
+      layout: this.getNextLayout(existingWidget.layout?.w || 3, existingWidget.layout?.h || 1),
       name: existingWidget.name + " - copy",
     };
     this.widgetAPIWrapper("create-widget", newWidget);
@@ -376,8 +403,12 @@ class WidgetLayoutEditor extends React.PureComponent {
     } = this.state;
     const errors = await this.getWidgetErrors();
     if (errors.length) {
-      this.setState ({modal: {onClose: "",
-        alert: {alertType: "Save Widget Error", alertMessage: errors.join("\n\n")}}});
+      this.setState({
+        modal: {
+          onClose: "",
+          alert: { alertType: "Save Widget Error", alertMessage: errors.join("\n\n") },
+        },
+      });
     } else {
       this.widgetAPIWrapper("update-widget", {
         id,
@@ -392,8 +423,10 @@ class WidgetLayoutEditor extends React.PureComponent {
 
   removeLayoutItem = (widgetId) => {
     const { widgets } = this.state;
-    const removedWidget = widgets.find((w) => w.id === parseInt(widgetId));
-    this.widgetAPIWrapper("delete-widget", removedWidget);
+    const removedWidget = widgets.find((w) => w.id === parseInt(widgetId, 10));
+    if (removedWidget) {
+      this.widgetAPIWrapper("delete-widget", removedWidget);
+    }
   };
 
   sameLayout = (layout1, layout2) =>
@@ -406,7 +439,7 @@ class WidgetLayoutEditor extends React.PureComponent {
     const { widgets } = this.state;
     widgets.forEach((stateWidget) => {
       const thisLayout = layout.find((l) => Number(l?.i) === stateWidget?.id);
-      if (!this.sameLayout(stateWidget?.layout, thisLayout)) {
+      if (thisLayout && !this.sameLayout(stateWidget?.layout, thisLayout)) {
         const { x, y, h, w } = thisLayout;
         this.widgetAPIWrapper("update-widget", { ...stateWidget, layout: { x, y, h, w } });
       }
@@ -490,9 +523,10 @@ class WidgetLayoutEditor extends React.PureComponent {
             id="widgetTitle"
             onChange={(e) => this.updateTitle(e.target.value)}
             placeholder={
-              this.getWidgetDesign("basemapTFODate") ?
-                "Planet TFO " + tfoLabel(this.getWidgetDesign("basemapTFODate"))
-                : "Enter Title"}
+              this.getWidgetDesign("basemapTFODate")
+                ? "Planet TFO " + tfoLabel(this.getWidgetDesign("basemapTFODate"))
+                : "Enter Title"
+            }
             type="text"
             value={this.state.title}
           />
@@ -502,17 +536,59 @@ class WidgetLayoutEditor extends React.PureComponent {
     );
   };
 
+  stopGridDrag = (e) => {
+    e.stopPropagation();
+  };
+
   containerButtons = (widget) => (
-    <div className="d-flex" style={{ gap: ".5rem" }}>
-      <div onClick={() => this.copyWidget(widget)} title="Copy Widget">
-        <SvgIcon color="currentColor" cursor="pointer" icon="copy" size="1.5rem" />
-      </div>
-      <div onClick={() => this.editWidgetDesign(widget)} title="Edit Widget">
-        <SvgIcon color="currentColor" cursor="pointer" icon="edit" size="1.5rem" />
-      </div>
-      <div onClick={() => this.removeLayoutItem(widget.id)} title="Delete Widget">
-        <SvgIcon color="currentColor" cursor="pointer" icon="trash" size="1.5rem" />
-      </div>
+    <div
+      className="d-flex align-items-center geodash-widget-actions"
+      onMouseDown={this.stopGridDrag}
+      onTouchStart={this.stopGridDrag}
+      style={{ gap: ".35rem" }}
+    >
+      <button
+        aria-label="Copiar Widget"
+        className="geodash-action-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          this.copyWidget(widget);
+        }}
+        onMouseDown={this.stopGridDrag}
+        onTouchStart={this.stopGridDrag}
+        title="Copiar Widget"
+        type="button"
+      >
+        <SvgIcon color="currentColor" cursor="pointer" icon="copy" size="1.25rem" />
+      </button>
+      <button
+        aria-label="Editar Widget"
+        className="geodash-action-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          this.editWidgetDesign(widget);
+        }}
+        onMouseDown={this.stopGridDrag}
+        onTouchStart={this.stopGridDrag}
+        title="Editar Widget"
+        type="button"
+      >
+        <SvgIcon color="currentColor" cursor="pointer" icon="edit" size="1.25rem" />
+      </button>
+      <button
+        aria-label="Eliminar Widget"
+        className="geodash-action-btn geodash-action-btn-danger"
+        onClick={(e) => {
+          e.stopPropagation();
+          this.removeLayoutItem(widget.id);
+        }}
+        onMouseDown={this.stopGridDrag}
+        onTouchStart={this.stopGridDrag}
+        title="Eliminar Widget"
+        type="button"
+      >
+        <SvgIcon color="currentColor" cursor="pointer" icon="trash" size="1.25rem" />
+      </button>
     </div>
   );
 
@@ -527,15 +603,20 @@ class WidgetLayoutEditor extends React.PureComponent {
           setWidgetDesign: this.setWidgetDesign,
           widgetDesign: this.state.widgetDesign,
           imagery: this.state.imagery,
-          widget: this.state.widgets.filter((w)=>w.basemapId === this.state.widgetDesign.basemapId)[0],
+          widget: this.state.widgets.filter((w) => w.basemapId === this.state.widgetDesign.basemapId)[0],
           getInstitutionImagery: this.getInstitutionImagery,
         }}
       >
-        {this.state.modal?.alert &&
-          <Modal title={this.state.modal.alert.alertType}
-            onClose={()=>{this.setState({modal: null});}}>
+        {this.state.modal?.alert && (
+          <Modal
+            title={this.state.modal.alert.alertType}
+            onClose={() => {
+              this.setState({ modal: null });
+            }}
+          >
             {this.state.modal.alert.alertMessage}
-          </Modal>}
+          </Modal>
+        )}
 
         {addDialog && (
           <GeoDashModal
@@ -567,13 +648,15 @@ class WidgetLayoutEditor extends React.PureComponent {
               <button
                 type="button"
                 className="btn btn-outline-darkgreen"
-                onClick={() => this.setState({ copyDialog: true })}>
+                onClick={() => this.setState({ copyDialog: true })}
+              >
                 Copy Layout
               </button>
               <button
                 type="button"
                 className="btn btn-outline-darkgreen"
-                onClick={() => this.setState({ addDialog: true })}>
+                onClick={() => this.setState({ addDialog: true })}
+              >
                 Add Widget
               </button>
             </div>
@@ -582,6 +665,7 @@ class WidgetLayoutEditor extends React.PureComponent {
             {widgets.length > 0 ? (
               <ReactGridLayout
                 cols={12}
+                draggableCancel=".geodash-widget-actions, .geodash-widget-actions *, button, input, select, textarea, a"
                 onLayoutChange={this.onLayoutChange}
                 resizeHandles={["e", "s", "se"]}
                 rowHeight={gridRowHeight}

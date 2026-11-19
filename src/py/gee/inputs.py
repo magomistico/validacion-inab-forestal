@@ -30,7 +30,7 @@ def getBitMask(image:ee.Image, bandName:str, bitMasks:dict):
      """
     mask = ee.Image(1)
     for _, maskItem in bitMasks.items():
-        mask = mask.Or(image.select(
+        mask = mask.And(image.select(
             bandName).bitwiseAnd(maskItem['value'] << maskItem['bit']).eq(0))
     return mask
 
@@ -258,14 +258,11 @@ def prepareL8L9(image):
         'cloud': {'bit':3,'value':1},
         'shadow': {'bit':4,'value':1},
         }
-    aerosolBitsToMask = {
-        'high_aerosol':{'bit':7,'value':11}
-    }
-
     mask1 = getBitMask(image, 'QA_PIXEL', cloudBitsToMask)
     mask2 = image.select('QA_RADSAT').eq(0)
     mask3 = image.select(LANDSAT_BAND_DICT['L8']).reduce(ee.Reducer.min()).gt(0)
-    mask4 = getBitMask(image, 'SR_QA_AEROSOL', aerosolBitsToMask)
+    # SR_QA_AEROSOL bits 6-7 equal to binary 11 (3) indicate high aerosol level
+    mask4 = image.select('SR_QA_AEROSOL').bitwiseAnd(3 << 6).neq(3 << 6)
 
     return scaled.updateMask(mask1.And(mask2).And(mask3).And(mask4))
 
@@ -524,44 +521,87 @@ def getTFO(options):
     
     return ee.ImageCollection(mosaic_nicfi)
 
+LANDSAT_TOA_COLLECTIONS = (
+    (
+        'LANDSAT/LC09/C02/T1_TOA',
+        ['B2', 'B3', 'B4', 'B5', 'B6', 'B10', 'B7'],
+        '2021-10-31',
+        None,
+    ),
+    (
+        'LANDSAT/LC08/C02/T1_TOA',
+        ['B2', 'B3', 'B4', 'B5', 'B6', 'B10', 'B7'],
+        '2013-03-18',
+        None,
+    ),
+    (
+        'LANDSAT/LE07/C02/T1_TOA',
+        ['B1', 'B2', 'B3', 'B4', 'B5', 'B6_VCID_1', 'B7'],
+        '1999-05-28',
+        '2024-01-20',
+    ),
+    (
+        'LANDSAT/LT05/C02/T1_TOA',
+        ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7'],
+        '1984-04-19',
+        '2011-11-09',
+    ),
+    (
+        'LANDSAT/LT04/C02/T1_TOA',
+        ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7'],
+        '1982-08-22',
+        '1993-12-15',
+    ),
+)
+
+
+def _date_ranges_overlap(start_date, end_date, col_start, col_end):
+    try:
+        s = str(start_date)[:10] if start_date else None
+        e = str(end_date)[:10] if end_date else None
+        if e and col_start and e < col_start:
+            return False
+        if s and col_end and s > col_end:
+            return False
+    except Exception:
+        return True
+    return True
+
+
 def prepareLsToa(image):
     cloudBitsToMask = {
-        'cloud': {'bit':3,'value':1},
-        'shadow': {'bit':4,'value':1},
-        'snow': {'bit':5,'value':1},
+        'dilated_cloud': {'bit': 1, 'value': 1},
+        'cloud': {'bit': 3, 'value': 1},
+        'shadow': {'bit': 4, 'value': 1},
+        'snow': {'bit': 5, 'value': 1},
     }
 
-    mask = getBitMask(image,'QA_PIXEL',cloudBitsToMask)
+    mask = getBitMask(image, 'QA_PIXEL', cloudBitsToMask)
 
-    return image.updateMask(mask)
-
-def getLandsatToa(startDate, endDate, geometry=None, cloudFilter=60):
-    # note: Excluding tier 2 TOA imagery because it has poor quality, but
-    # leaving code commented out encase we choose to reinstate using
-    # tier 2 imagery.
-    collectionIds = {
-        'LANDSAT/LC09/C02/T1_TOA' : LANDSAT_BAND_DICT['L9'],
-        'LANDSAT/LC08/C02/T1_TOA' : LANDSAT_BAND_DICT['L8'],
-        'LANDSAT/LE07/C02/T1_TOA' : LANDSAT_BAND_DICT['L7'],
-        'LANDSAT/LT05/C02/T1_TOA' : LANDSAT_BAND_DICT['L5'],
-        'LANDSAT/LT04/C02/T1_TOA' : LANDSAT_BAND_DICT['L4'],
-        # 'LANDSAT/LC09/C02/T2_TOA' : LANDSAT_BAND_DICT['L9'],
-        # 'LANDSAT/LC08/C02/T2_TOA' : LANDSAT_BAND_DICT['L8'],
-        # 'LANDSAT/LE07/C02/T2_TOA' : LANDSAT_BAND_DICT['L7'],
-        # 'LANDSAT/LT05/C02/T2_TOA' : LANDSAT_BAND_DICT['L5'],
-        # 'LANDSAT/LT04/C02/T2_TOA' : LANDSAT_BAND_DICT['L4'],
-    }
+    return image.updateMask(mask).select(LANDSAT_BAND_NAMES)
 
 
-    collection = ee.ImageCollection([])
-    for name, bands in collectionIds.items():
-        # make new lists with QA_PIXEL included for cloud masking
-        bands = bands + ['QA_PIXEL']
-        readableBands = LANDSAT_BAND_NAMES + ['QA_PIXEL']
+def getLandsatToa(startDate, endDate, geometry=None, cloudFilter=60, computeIndices=True):
+    # note: Excluding tier 2 TOA imagery because it has poor quality.
+    readableBands = LANDSAT_BAND_NAMES + ['QA_PIXEL']
+    cloud_max = float(cloudFilter)
 
-        tmpCollection = ee.ImageCollection(name).select(bands, readableBands).filter(ee.Filter.lt('CLOUD_COVER', cloudFilter))
-        collection = mergeLandsatCols(collection, tmpCollection, startDate, endDate, geometry, prepareLsToa)
-    
-    collection = doIndices(collection)
+    merged = None
+    for name, spectral_bands, col_start, col_end in LANDSAT_TOA_COLLECTIONS:
+        if not _date_ranges_overlap(startDate, endDate, col_start, col_end):
+            continue
+        bands = spectral_bands + ['QA_PIXEL']
+        tmpCollection = (
+            filterRegion(ee.ImageCollection(name), geometry)
+            .filterDate(startDate, endDate)
+            .filter(ee.Filter.lt('CLOUD_COVER', cloud_max))
+            .select(bands, readableBands)
+            .map(prepareLsToa)
+        )
+        merged = tmpCollection if merged is None else merged.merge(tmpCollection)
+
+    collection = merged if merged is not None else ee.ImageCollection([])
+    if computeIndices:
+        collection = doIndices(collection)
 
     return collection
