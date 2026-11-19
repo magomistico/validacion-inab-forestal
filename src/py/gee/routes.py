@@ -1,13 +1,24 @@
-from distutils.util import strtobool
 import json
+import ee
 
-from gee.utils import initialize, listAvailableBands, imageToMapId, imageCollectionToMapId, \
+from gee.utils import initialize, ensure_initialized, listAvailableBands, imageToMapId, imageCollectionToMapId, \
     filteredImageCompositeToMapId, filteredSentinelComposite, filteredSentinelSARComposite, \
     filteredImageByIndexToMapId, getFeatureCollectionTileUrl, getTimeSeriesByCollectionAndIndex, \
     getTimeSeriesByIndex, getStatistics, getDegradationPlotsByPoint, getDegradationPlotsByPointS1, \
     getDegradationTileUrlByDate, getDegradationTileUrlByDateS1, safeParseJSON, filteredNicfiCompositeToMapId
 from gee.planet import getPlanetMapID
-from gee.inputs import getLandsatToa, getTFO
+from gee.inputs import getLandsatToa, getTFO, LANDSAT_BAND_NAMES
+
+
+def strtobool(val):
+    if isinstance(val, bool):
+        return val
+    s = str(val).strip().lower()
+    if s in ('y', 'yes', 't', 'true', 'on', '1'):
+        return True
+    if s in ('n', 'no', 'f', 'false', 'off', '0'):
+        return False
+    raise ValueError(f"invalid truth value {val!r}")
 
 
 def safeListGet(l, idx, default=None):
@@ -24,9 +35,34 @@ def getDefault(dict, key, default=None):
     else:
         return val
 
+
+def _coords_to_ee_geometry(coords):
+    if not coords or not isinstance(coords, (list, tuple)):
+        return None
+    if isinstance(coords[0], (list, tuple)):
+        return ee.Geometry.Polygon(coords)
+    if len(coords) >= 2:
+        return ee.Geometry.Point(coords[:2])
+    return None
+
+
+def _clean_bands_list(raw_bands, default_bands, uppercase=False):
+    if isinstance(raw_bands, (list, tuple)):
+        bands = [str(b).strip() for b in raw_bands if str(b).strip()]
+    elif isinstance(raw_bands, str):
+        bands = [b.strip() for b in raw_bands.split(',') if b.strip()]
+    else:
+        bands = []
+    if not bands:
+        bands = list(default_bands)
+    if uppercase:
+        bands = [b.upper() for b in bands]
+    return bands
+
 # ########## Helper routes ##########
 
 def getAvailableBands(requestDict):
+    ensure_initialized()
     values = listAvailableBands(
         getDefault(requestDict, 'assetId'),
         getDefault(requestDict, 'assetType')
@@ -37,6 +73,7 @@ def getAvailableBands(requestDict):
 
 
 def image(requestDict):
+    ensure_initialized()
     values = imageToMapId(
         getDefault(requestDict, 'assetId'),
         safeParseJSON(getDefault(requestDict, 'visParams', {}))
@@ -47,6 +84,7 @@ def image(requestDict):
 
 
 def imageCollection(requestDict):
+    ensure_initialized()
     visParams = safeParseJSON(getDefault(requestDict, 'visParams', {}))
     if visParams.get("bands") and isinstance(visParams.get("bands"), str):
         bands = visParams.get("bands").replace(' ', '')
@@ -64,20 +102,53 @@ def imageCollection(requestDict):
 # ########## Pre defined ee.ImageCollection ##########
 
 def filteredLandsat(requestDict):
-    startDate = getDefault(requestDict, 'startDate', '1990-01-01')
+    ensure_initialized()
+    startDate = getDefault(requestDict, 'startDate', '2020-01-01')
     endDate = getDefault(requestDict, 'endDate', '2023-01-01')
+    cloud_max = float(getDefault(requestDict, 'cloudLessThan', 60))
+    band_list = _clean_bands_list(
+        getDefault(requestDict, 'bands', 'RED,GREEN,BLUE'),
+        ['RED', 'GREEN', 'BLUE'],
+        uppercase=True,
+    )
+    needs_indices = any(b not in LANDSAT_BAND_NAMES for b in band_list)
+    collection = getLandsatToa(
+        startDate,
+        endDate,
+        cloudFilter=cloud_max,
+        computeIndices=needs_indices,
+    )
+
+    geom = getDefault(requestDict, 'geometry', None)
+    if geom:
+        try:
+            ee_geom = _coords_to_ee_geometry(geom)
+            if ee_geom is not None:
+                has_scene = collection.filterBounds(ee_geom).limit(1).size().getInfo()
+                if has_scene == 0:
+                    cloud_label = int(cloud_max) if cloud_max.is_integer() else cloud_max
+                    return {
+                        'errMsg': (
+                            f"No hay imágenes Landsat sobre esta parcela entre {startDate} y {endDate} "
+                            f"con Cloud Score < {cloud_label}%. Sube Cloud Score (ej. 50–70) o amplía las fechas."
+                        )
+                    }
+        except Exception as check_err:
+            print(f"[WARN] No se pudo verificar cobertura Landsat en parcela: {check_err}")
+
     values = filteredImageCompositeToMapId(
-        getLandsatToa(startDate, endDate),
+        collection,
         {
             'min': getDefault(requestDict, 'min', '0.03,0.01,0.05'),
             'max': getDefault(requestDict, 'max', '0.45,0.5,0.4'),
-            'bands': getDefault(requestDict, 'bands', 'BLUE,RED,GREEN')
+            'bands': band_list,
         },
-        getDefault(requestDict, 'cloudLessThan', 60),
+        cloud_max,
     )
     return values
 
 def filteredNicfi(requestDict):
+    ensure_initialized()
     startDate = getDefault(requestDict, 'startDate', '1990-01-01')
     endDate = getDefault(requestDict, 'endDate', '2023-01-01')
     values = filteredNicfiCompositeToMapId(
@@ -85,21 +156,56 @@ def filteredNicfi(requestDict):
         {
             'min': getDefault(requestDict, 'min', '113,113,113'),
             'max': getDefault(requestDict, 'max', '1465,1465,1465'),
-            'bands': getDefault(requestDict, 'bands', 'R,G,B')
+            'bands': _clean_bands_list(getDefault(requestDict, 'bands', 'R,G,B'), ['R', 'G', 'B'])
         },
     )
     return values
 
 def filteredSentinel2(requestDict):
+    ensure_initialized()
+    startDate = getDefault(requestDict, 'startDate', '2018-01-01')
+    endDate = getDefault(requestDict, 'endDate', '2023-01-01')
+    cloud_max = float(getDefault(requestDict, 'cloudLessThan', 60))
+    band_list = _clean_bands_list(
+        getDefault(requestDict, 'bands', 'B4,B3,B2'),
+        ['B4', 'B3', 'B2'],
+        uppercase=True,
+    )
+
+    geom = getDefault(requestDict, 'geometry', None)
+    if geom:
+        try:
+            ee_geom = _coords_to_ee_geometry(geom)
+            if ee_geom is not None:
+                has_scene = (
+                    ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
+                    .filterDate(startDate, endDate)
+                    .filterBounds(ee_geom)
+                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', cloud_max))
+                    .limit(1)
+                    .size()
+                    .getInfo()
+                )
+                if has_scene == 0:
+                    cloud_label = int(cloud_max) if cloud_max.is_integer() else cloud_max
+                    return {
+                        'errMsg': (
+                            f"No hay imágenes Sentinel-2 sobre esta parcela entre {startDate} y {endDate} "
+                            f"con Cloud Score < {cloud_label}%. Sube Cloud Score (ej. 50–70) o amplía las fechas."
+                        )
+                    }
+        except Exception as check_err:
+            print(f"[WARN] No se pudo verificar cobertura Sentinel-2 en parcela: {check_err}")
+
     values = filteredSentinelComposite(
         {
             'min': getDefault(requestDict, 'min', '0.03,0.01,0.05'),
             'max': getDefault(requestDict, 'max', '0.45,0.5,0.4'),
-            'bands': getDefault(requestDict, 'bands', 'B4,B5,B3')
+            'bands': band_list,
         },
-        getDefault(requestDict, 'startDate', '2010-01-01'),
-        getDefault(requestDict, 'endDate', '2022-01-01'),
-        getDefault(requestDict, 'cloudLessThan', 90)
+        startDate,
+        endDate,
+        cloud_max,
     )
     return values
 
@@ -108,6 +214,7 @@ def filteredSentinel2(requestDict):
 
 
 def filteredSentinelSAR(requestDict):
+    ensure_initialized()
     values = filteredSentinelSARComposite(
         {
             'min': getDefault(requestDict, 'min', '0'),
@@ -121,6 +228,7 @@ def filteredSentinelSAR(requestDict):
 
 
 def imageCollectionByIndex(requestDict):
+    ensure_initialized()
     values = filteredImageByIndexToMapId(
         getDefault(requestDict, 'startDate', '1990-01-01'),
         getDefault(requestDict, 'endDate', '2100-01-01'),
@@ -135,6 +243,7 @@ def imageCollectionByIndex(requestDict):
 
 # # TODO, this route inst really generic to any feature collections like the name suggests.
 def featureCollection(requestDict):
+    ensure_initialized()
     visParams = safeParseJSON(getDefault(requestDict, 'visParams', {}))
     values = {
         'url': getFeatureCollectionTileUrl(
@@ -166,6 +275,7 @@ def getPlanetTile(requestDict):
 # ########## Time Series ##########
 
 def timeSeriesByIndex(requestDict):
+    ensure_initialized()
     values = {
         'timeseries': getTimeSeriesByIndex(
             getDefault(requestDict, 'sourceName', 'Landsat'),
@@ -187,6 +297,7 @@ def timeSeriesByIndex(requestDict):
 
 
 def degradationTimeSeries(requestDict):
+    ensure_initialized()
     if getDefault(requestDict, 'dataType', 'landsat') == 'landsat':
         values = {
             'timeseries': getDegradationPlotsByPoint(
@@ -208,6 +319,7 @@ def degradationTimeSeries(requestDict):
 
 
 def degradationTileUrl(requestDict):
+    ensure_initialized()
     imageDate = getDefault(requestDict, 'imageDate', None)
     geometry = getDefault(requestDict, 'geometry')
     if getDefault(requestDict, 'degDataType', 'landsat') == 'landsat':
@@ -237,7 +349,8 @@ def degradationTileUrl(requestDict):
 
 # ########## DynamicWorld ##########
 
-def dynamicWorld(requestDict):    
+def dynamicWorld(requestDict):
+    ensure_initialized()
     geometry = getDefault(requestDict, 'geometry')
     startDate="2021-01-01"
     endDate="2022-01-01"
@@ -249,8 +362,9 @@ def dynamicWorld(requestDict):
 
 
 def statistics(requestDict):
-    values = getStatistics(getDefault(requestDict, 'extent', None))    
-    return {url: values}
+    ensure_initialized()
+    values = getStatistics(getDefault(requestDict, 'extent', None))
+    return values
 
 
 # ########## AREA2 Stratification & Sampling ##########

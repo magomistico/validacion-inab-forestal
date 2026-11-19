@@ -553,7 +553,11 @@ export const ExternalTools = () => {
         `&plotShape=${
           currentPlot?.plotGeom?.includes("Point") ? currentProject?.plotShape : "polygon"
         }` +
-        `&center=${currentPlot?.plotGeom?.includes("Point") ? currentPlot?.plotGeom : ""}` +
+        `&center=${
+          currentPlot?.plotGeom?.includes("Point")
+            ? encodeURIComponent(currentPlot?.plotGeom)
+            : ""
+        }` +
         `&radius=${plotRadius}`,
       `_geo-dash_${currentProject?.id}`
     );

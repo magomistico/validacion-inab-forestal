@@ -16,7 +16,7 @@ export default function GDDateRange({ title, optional, prefixPath = "" }) {
           id="startDate"
           onChange={(e) => setWidgetDesign("startDate", get(e, "target.value", ""), prefixPath)}
           type="date"
-          value={getWidgetDesign("startDate", prefixPath)}
+          value={getWidgetDesign("startDate", prefixPath) || ""}
         />
         <div className="mx-2">to</div>
         <input
@@ -24,7 +24,7 @@ export default function GDDateRange({ title, optional, prefixPath = "" }) {
           id="endDate"
           onChange={(e) => setWidgetDesign("endDate", get(e, "target.value", ""), prefixPath)}
           type="date"
-          value={getWidgetDesign("endDate", prefixPath)}
+          value={getWidgetDesign("endDate", prefixPath) || ""}
         />
       </div>
     </div>
