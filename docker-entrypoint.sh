@@ -39,12 +39,12 @@ import os, re, json
 with open("config.edn", "r", encoding="utf-8") as f:
     content = f.read()
 
-smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-smtp_port = os.environ.get("SMTP_PORT", "587")
-smtp_user = os.environ.get("SMTP_USER", "")
-smtp_pass = os.environ.get("SMTP_PASS", "")
+smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
+smtp_port = os.environ.get("SMTP_PORT", "587").strip()
+smtp_user = os.environ.get("SMTP_USER", "").strip()
+smtp_pass = os.environ.get("SMTP_PASS", "").strip()
 smtp_tls = "true" if str(os.environ.get("SMTP_TLS", "true")).strip().lower() in ("true", "1", "yes") else "false"
-base_url = os.environ.get("BASE_URL", "https://inab-sig.duckdns.org").rstrip("/") + "/"
+base_url = os.environ.get("BASE_URL", "https://inab-sig.duckdns.org").strip().rstrip("/") + "/"
 
 replacements = {
     ":triangulum.email/host": json.dumps(smtp_host),
@@ -61,6 +61,11 @@ for key, value in replacements.items():
 
 with open("config.edn", "w", encoding="utf-8") as f:
     f.write(content)
+
+if smtp_user and smtp_pass:
+    print(f"[INFO] SMTP configurado: host={smtp_host}, port={smtp_port}, user={smtp_user}, base_url={base_url}")
+else:
+    print("[INFO] SMTP no configurado (SMTP_USER/SMTP_PASS vacíos).")
 EOPY
 
 # 2. Esperar disponibilidad de PostgreSQL

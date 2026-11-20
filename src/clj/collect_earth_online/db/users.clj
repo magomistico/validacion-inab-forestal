@@ -6,6 +6,7 @@
            java.time.LocalDateTime
            java.util.UUID)
   (:require [clojure.string             :as str]
+            [postal.core                :refer [send-message]]
             [triangulum.database        :refer [call-sql sql-primitive]]
             [triangulum.type-conversion :as tc]
             [triangulum.config          :refer [get-config]]
@@ -112,8 +113,9 @@
         (data-response "" {:session {:userName updated-email}})))))
 
 (defn- smtp-configured? []
-  (and (not (str/blank? (get-config :email :user)))
-       (not (str/blank? (get-config :email :pass)))))
+  (let [mail-cfg (get-config :mail)]
+    (and (not (str/blank? (:user mail-cfg)))
+         (not (str/blank? (:pass mail-cfg))))))
 
 (defn- resolve-base-url [{:keys [headers scheme]}]
   (let [configured (str/replace (str (or (get-base-url) "")) #"/+$" "")
@@ -136,15 +138,26 @@
           (URLEncoder/encode (str reset-key) "UTF-8")))
 
 (defn- send-password-reset-email! [email reset-url]
-  (let [email-msg (format (str "Hola %s,\n\n"
+  (let [mail-cfg  (select-keys (get-config :mail) [:host :user :pass :tls :port])
+        email-msg (format (str "Hola %s,\n\n"
                                "Recibimos una solicitud para restablecer tu contraseña en INAB · SIG.\n\n"
                                "Haz clic en el siguiente enlace de un solo uso para definir tu nueva contraseña:\n\n"
                                "  %s\n\n"
                                "Si no solicitaste este cambio, puedes ignorar este mensaje.\n\n"
                                "Atentamente,\n"
                                "INAB · SIG - Plataforma de Validación Forestal")
-                          email reset-url)]
-    (send-mail email nil nil "Restablecimiento de contraseña - INAB · SIG" email-msg :text)))
+                          email reset-url)
+        result    (send-message
+                   mail-cfg
+                   {:from    (:user mail-cfg)
+                    :to      email
+                    :subject "Restablecimiento de contraseña - INAB · SIG"
+                    :body    [{:type    "text/plain; charset=utf-8"
+                               :content email-msg}]})]
+    (when-not (= :SUCCESS (:error result))
+      (throw (ex-info (str "SMTP error: " (or (:message result) (:error result) result))
+                      {:result result})))
+    result))
 
 (defn password-request [{:keys [params] :as request}]
   (let [clean-email (str/lower-case (str/trim (or (:email params) "")))
@@ -168,6 +181,7 @@
           (send-password-reset-email! email reset-url)
           (data-response "")
           (catch Exception e
+            (println "[WARN] Error enviando correo de recuperación a" email ":" (ex-message e))
             (log-str "[WARN] Error enviando correo de recuperación a " email ": " (ex-message e))
             (data-response
              "No se pudo enviar el correo de recuperación en este momento. Verifica la configuración SMTP o solicita a un administrador un enlace desde la pestaña Usuarios.")))))))
