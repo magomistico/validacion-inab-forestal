@@ -137,23 +137,76 @@
           (URLEncoder/encode (str email) "UTF-8")
           (URLEncoder/encode (str reset-key) "UTF-8")))
 
+(defn- escape-html [s]
+  (-> (str s)
+      (str/replace "&" "&amp;")
+      (str/replace "<" "&lt;")
+      (str/replace ">" "&gt;")
+      (str/replace "\"" "&quot;")))
+
 (defn- send-password-reset-email! [email reset-url]
-  (let [mail-cfg  (select-keys (get-config :mail) [:host :user :pass :tls :port])
-        email-msg (format (str "Hola %s,\n\n"
-                               "Recibimos una solicitud para restablecer tu contraseña en INAB · SIG.\n\n"
-                               "Haz clic en el siguiente enlace de un solo uso para definir tu nueva contraseña:\n\n"
-                               "  %s\n\n"
-                               "Si no solicitaste este cambio, puedes ignorar este mensaje.\n\n"
-                               "Atentamente,\n"
-                               "INAB · SIG - Plataforma de Validación Forestal")
-                          email reset-url)
-        result    (send-message
-                   mail-cfg
-                   {:from    (:user mail-cfg)
-                    :to      email
-                    :subject "Restablecimiento de contraseña - INAB · SIG"
-                    :body    [{:type    "text/plain; charset=utf-8"
-                               :content email-msg}]})]
+  (let [mail-cfg     (select-keys (get-config :mail) [:host :user :pass :tls :port])
+        env-from     (str/trim (or (System/getenv "SMTP_FROM") ""))
+        env-name     (str/trim (or (System/getenv "SMTP_FROM_NAME") ""))
+        from-addr    (if (str/blank? env-from) (:user mail-cfg) env-from)
+        from-name    (if (str/blank? env-name) "INAB SIG" env-name)
+        from-domain  (or (second (str/split (str from-addr) #"@" 2)) "inab.gob.gt")
+        from-header  (format "%s <%s>" from-name from-addr)
+        text-body    (format (str "Hola,\n\n"
+                                  "Recibimos una solicitud para restablecer la contraseña de la cuenta %s en INAB SIG.\n\n"
+                                  "Abre el siguiente enlace de un solo uso para crear tu nueva contraseña:\n\n"
+                                  "%s\n\n"
+                                  "Si no solicitaste este cambio, puedes ignorar este correo de forma segura.\n\n"
+                                  "Instituto Nacional de Bosques (INAB) - Guatemala\n"
+                                  "Plataforma de Validación Forestal INAB SIG")
+                             email reset-url)
+        safe-email   (escape-html email)
+        safe-url     (escape-html reset-url)
+        html-body    (format (str "<!DOCTYPE html>"
+                                  "<html lang=\"es\"><head><meta charset=\"UTF-8\"></head>"
+                                  "<body style=\"margin:0;padding:24px;background-color:#f4f6f4;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\">"
+                                  "<table role=\"presentation\" width=\"100%%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:10px;border:1px solid #d1e7d5;overflow:hidden;\">"
+                                  "<tr><td style=\"background-color:#1b4332;padding:20px 28px;color:#ffffff;\">"
+                                  "<h1 style=\"margin:0;font-size:18px;font-weight:700;letter-spacing:0.3px;\">INAB · SIG</h1>"
+                                  "<p style=\"margin:4px 0 0 0;font-size:12px;color:#c7ebd0;\">Plataforma de Validación Forestal</p>"
+                                  "</td></tr>"
+                                  "<tr><td style=\"padding:28px;\">"
+                                  "<h2 style=\"margin:0 0 12px 0;font-size:17px;color:#111827;\">Solicitud de restablecimiento de contraseña</h2>"
+                                  "<p style=\"margin:0 0 14px 0;font-size:14px;line-height:1.55;\">"
+                                  "Recibimos una solicitud para cambiar la contraseña de la cuenta <strong>%s</strong>."
+                                  "</p>"
+                                  "<p style=\"margin:0 0 22px 0;font-size:14px;line-height:1.55;\">"
+                                  "Haz clic en el siguiente botón para definir tu nueva contraseña (enlace de un solo uso):"
+                                  "</p>"
+                                  "<p style=\"margin:0 0 22px 0;text-align:center;\">"
+                                  "<a href=\"%s\" style=\"display:inline-block;background-color:#2d6a4f;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:8px;\">Restablecer contraseña</a>"
+                                  "</p>"
+                                  "<p style=\"margin:0 0 12px 0;font-size:12px;color:#4b5563;line-height:1.5;\">"
+                                  "Si el botón no funciona, copia y pega este enlace en tu navegador:<br>"
+                                  "<a href=\"%s\" style=\"color:#2d6a4f;word-break:break-all;\">%s</a>"
+                                  "</p>"
+                                  "<p style=\"margin:16px 0 0 0;font-size:12px;color:#6b7280;\">"
+                                  "Si no solicitaste este cambio, puedes ignorar este mensaje."
+                                  "</p>"
+                                  "</td></tr>"
+                                  "<tr><td style=\"background-color:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;\">"
+                                  "Instituto Nacional de Bosques (INAB) · Guatemala"
+                                  "</td></tr></table></body></html>")
+                             safe-email safe-url safe-url safe-url)
+        result       (send-message
+                      mail-cfg
+                      {:from           from-header
+                       :reply-to       from-addr
+                       :to             email
+                       :subject        "Restablecer contraseña - INAB SIG"
+                       :message-id     #(str "<" (UUID/randomUUID) "@" from-domain ">")
+                       :user-agent     "INAB-SIG-Mailer/1.0"
+                       :Auto-Submitted "auto-generated"
+                       :body           [:alternative
+                                        {:type    "text/plain; charset=utf-8"
+                                         :content text-body}
+                                        {:type    "text/html; charset=utf-8"
+                                         :content html-body}]})]
     (when-not (= :SUCCESS (:error result))
       (throw (ex-info (str "SMTP error: " (or (:message result) (:error result) result))
                       {:result result})))
