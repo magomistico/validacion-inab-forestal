@@ -111,49 +111,134 @@
           (call-sql "update_password" {:log? false} updated-email password))
         (data-response "" {:session {:userName updated-email}})))))
 
-(defn password-request [{:keys [params]}]
-  (let [reset-key (str (UUID/randomUUID))
-        email     (sql-primitive (call-sql "set_password_reset_key" {:log? false} (:email params) reset-key))
-        email-msg (format (str "Hi %s,\n\n"
-                               "  To reset your password, simply click the following link:\n\n"
-                               "  %s/password-reset?email=%s&passwordResetKey=%s")
-                          email (get-base-url) email reset-key)]
-    (if email
-      (try
-        (send-mail email nil nil "Password reset on CEO" email-msg :text)
-        (data-response "")
-        (catch Exception _
-          (data-response (str "A user with the email "
-                              email
-                              " was found, but there was a server error.  Please contact support@sig-gis.com."))))
-      (data-response "There is no user with that email address."))))
+(defn- smtp-configured? []
+  (and (not (str/blank? (get-config :email :user)))
+       (not (str/blank? (get-config :email :pass)))))
+
+(defn- resolve-base-url [{:keys [headers scheme]}]
+  (let [configured (str/replace (str (or (get-base-url) "")) #"/+$" "")
+        use-config? (and (not (str/blank? configured))
+                         (not (str/includes? configured "my.domain")))]
+    (if use-config?
+      configured
+      (let [proto (or (get headers "x-forwarded-proto")
+                      (when scheme (name scheme))
+                      "https")
+            host  (or (get headers "x-forwarded-host")
+                      (get headers "host")
+                      "inab-sig.duckdns.org")]
+        (str proto "://" host)))))
+
+(defn- build-reset-url [request email reset-key]
+  (format "%s/password-reset?email=%s&passwordResetKey=%s"
+          (resolve-base-url request)
+          (URLEncoder/encode (str email) "UTF-8")
+          (URLEncoder/encode (str reset-key) "UTF-8")))
+
+(defn- send-password-reset-email! [email reset-url]
+  (let [email-msg (format (str "Hola %s,\n\n"
+                               "Recibimos una solicitud para restablecer tu contraseña en INAB · SIG.\n\n"
+                               "Haz clic en el siguiente enlace de un solo uso para definir tu nueva contraseña:\n\n"
+                               "  %s\n\n"
+                               "Si no solicitaste este cambio, puedes ignorar este mensaje.\n\n"
+                               "Atentamente,\n"
+                               "INAB · SIG - Plataforma de Validación Forestal")
+                          email reset-url)]
+    (send-mail email nil nil "Restablecimiento de contraseña - INAB · SIG" email-msg :text)))
+
+(defn password-request [{:keys [params] :as request}]
+  (let [clean-email (str/lower-case (str/trim (or (:email params) "")))
+        reset-key   (str (UUID/randomUUID))
+        email       (when-not (str/blank? clean-email)
+                      (sql-primitive (call-sql "set_password_reset_key" {:log? false} clean-email reset-key)))]
+    (cond
+      (str/blank? clean-email)
+      (data-response "Por favor ingresa tu correo electrónico.")
+
+      (nil? email)
+      (data-response "No existe ninguna cuenta registrada con ese correo electrónico.")
+
+      (not (smtp-configured?))
+      (data-response
+       "El envío automático de correos (SMTP) aún no está configurado en el servidor. Solicita a un administrador de INAB · SIG que te genere un enlace de recuperación desde la pestaña Usuarios.")
+
+      :else
+      (let [reset-url (build-reset-url request email reset-key)]
+        (try
+          (send-password-reset-email! email reset-url)
+          (data-response "")
+          (catch Exception e
+            (log-str "[WARN] Error enviando correo de recuperación a " email ": " (ex-message e))
+            (data-response
+             "No se pudo enviar el correo de recuperación en este momento. Verifica la configuración SMTP o solicita a un administrador un enlace desde la pestaña Usuarios.")))))))
 
 (defn- get-password-reset-errors [user email reset-key password password-confirmation]
   (cond (nil? user)
-        "There is no user with that email address."
+        "No existe ninguna cuenta registrada con ese correo electrónico."
 
-        (not= reset-key (:reset_key user))
-        (str "Invalid reset key for user " email ".")
+        (or (str/blank? reset-key)
+            (str/blank? (:reset_key user))
+            (not= reset-key (:reset_key user)))
+        (str "El enlace o código de recuperación para " email " es inválido o ya fue utilizado. Solicita uno nuevo.")
 
-        (< (count password) 8)
-        "Password must be at least 8 characters."
+        (< (count (or password "")) 6)
+        "La contraseña debe tener al menos 6 caracteres."
 
         (not= password password-confirmation)
-        "Password and Password confirmation do not match."
+        "La contraseña y su confirmación no coinciden."
 
         :else nil))
 
 (defn password-reset [{:keys [params]}]
-  (let [email                 (:email params)
-        reset-key             (:passwordResetKey params)
-        password              (:password params)
-        password-confirmation (:passwordConfirmation params)
-        user                  (first (call-sql "get_user_by_email" email))]
+  (let [email                 (str/lower-case (str/trim (or (:email params) "")))
+        reset-key             (str/trim (or (:passwordResetKey params) ""))
+        password              (str (or (:password params) ""))
+        password-confirmation (str (or (:passwordConfirmation params) ""))
+        user                  (when-not (str/blank? email)
+                                (first (call-sql "get_user_by_email" email)))]
     (if-let [error-msg (get-password-reset-errors user email reset-key password password-confirmation)]
       (data-response error-msg)
       (do
         (call-sql "update_password" {:log? false} email password)
         (data-response "")))))
+
+(defn admin-password-reset-link [{:keys [params session] :as request}]
+  (let [institution-id (tc/val->int (:institutionId params))
+        clean-email    (str/lower-case (str/trim (or (:email params) "")))
+        send-email?    (boolean (:sendEmail params))
+        global-admin?  (= "admin" (:userRole session))
+        inst-emails    (when (pos? institution-id)
+                         (->> (call-sql "get_all_users_by_institution_id" institution-id)
+                              (map #(str/lower-case (str/trim (or (:email %) ""))))
+                              (set)))
+        allowed?       (or global-admin? (contains? inst-emails clean-email))]
+    (cond
+      (str/blank? clean-email)
+      (data-response {:ok false :error "Correo electrónico requerido."} {:status 400})
+
+      (not allowed?)
+      (data-response {:ok false :error "El usuario no pertenece a esta institución."} {:status 403})
+
+      :else
+      (let [reset-key (str (UUID/randomUUID))
+            email     (sql-primitive (call-sql "set_password_reset_key" {:log? false} clean-email reset-key))]
+        (if-not email
+          (data-response {:ok false :error "No existe ninguna cuenta con ese correo."} {:status 404})
+          (let [reset-url  (build-reset-url request email reset-key)
+                smtp-ready (smtp-configured?)
+                email-sent (if (and send-email? smtp-ready)
+                             (try
+                               (send-password-reset-email! email reset-url)
+                               true
+                               (catch Exception e
+                                 (log-str "[WARN] Error enviando correo admin reset a " email ": " (ex-message e))
+                                 false))
+                             false)]
+            (data-response {:ok        true
+                            :email     email
+                            :resetUrl  reset-url
+                            :smtpReady smtp-ready
+                            :emailSent email-sent})))))))
 
 (defn- get-verify-email-errors [user email reset-key]
   (cond (nil? user)

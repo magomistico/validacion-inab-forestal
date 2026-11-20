@@ -7,6 +7,7 @@ import Modal from "../components/Modal";
 import "../../css/institution.css";
 
 export const UsersTab = ({
+  institutionId,
   usersList = [],
   editUsersBulk,
   addUsersBulk,
@@ -17,6 +18,75 @@ export const UsersTab = ({
   const [selectedRows, setSelectedRows] = useState([]);
   const [filterText, setFilterText] = useState("");
   const [showAddUsers, setShowAddUsers] = useState(false);
+  const [resetModal, setResetModal] = useState(null);
+  const [resetLoadingEmail, setResetLoadingEmail] = useState(null);
+  const [copiedResetUrl, setCopiedResetUrl] = useState(false);
+
+  const handleGenerateResetLink = async (email) => {
+    setResetLoadingEmail(email);
+    setCopiedResetUrl(false);
+    try {
+      const response = await fetch("/admin-password-reset-link", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          institutionId,
+          email,
+          sendEmail: true,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok && data && data.ok && data.resetUrl) {
+        setResetModal({
+          email: data.email || email,
+          resetUrl: data.resetUrl,
+          smtpReady: Boolean(data.smtpReady),
+          emailSent: Boolean(data.emailSent),
+          error: null,
+        });
+      } else {
+        setResetModal({
+          email,
+          resetUrl: null,
+          smtpReady: false,
+          emailSent: false,
+          error:
+            (data && data.error) ||
+            "No se pudo generar el enlace de recuperación para este usuario.",
+        });
+      }
+    } catch (_err) {
+      setResetModal({
+        email,
+        resetUrl: null,
+        smtpReady: false,
+        emailSent: false,
+        error: "Error de conexión al generar el enlace de recuperación.",
+      });
+    } finally {
+      setResetLoadingEmail(null);
+    }
+  };
+
+  const handleCopyResetUrl = (url) => {
+    if (!url) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopiedResetUrl(true);
+      });
+    } else {
+      const input = document.createElement("textarea");
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopiedResetUrl(true);
+    }
+  };
 
   const filteredUsers = useMemo(() => {
     const lower = filterText.toLowerCase();
@@ -60,23 +130,39 @@ export const UsersTab = ({
       {
         omit: !isAdmin,
         name: "Actions",
-        width: "120px",
+        width: "290px",
         cell: (row) => (
-          <button
-            className="outlined-btn"
-            onClick={() =>
-              window.location.assign(`/account?accountId=${row.id}`)
-            }
-          >
-            View User Stats
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <button
+              className="outlined-btn"
+              onClick={() =>
+                window.location.assign(`/account?accountId=${row.id}`)
+              }
+              type="button"
+            >
+              View User Stats
+            </button>
+            <button
+              className="outlined-btn"
+              disabled={resetLoadingEmail === row.email}
+              onClick={() => handleGenerateResetLink(row.email)}
+              style={{
+                borderColor: "rgba(114, 184, 121, 0.45)",
+                color: "#9ed999",
+              }}
+              title="Generar enlace de recuperación de contraseña de un solo uso"
+              type="button"
+            >
+              {resetLoadingEmail === row.email ? "Generando..." : "Restablecer clave"}
+            </button>
+          </div>
         ),
         ignoreRowClick: true,
         allowOverflow: true,
         button: true,
       },
     ],
-    [isAdmin]
+    [isAdmin, resetLoadingEmail, institutionId]
   );
 
   const customStyles = {
@@ -217,6 +303,95 @@ export const UsersTab = ({
           onClose={() => setShowAddUsers(false)}
           onAdd={(rows) => addUsersBulk(rows)}
         />
+      )}
+
+      {resetModal && (
+        <Modal
+          title="Restablecer contraseña"
+          closeText="Cerrar"
+          onClose={() => {
+            setResetModal(null);
+            setCopiedResetUrl(false);
+          }}
+        >
+          {resetModal.error ? (
+            <div
+              style={{
+                background: "rgba(220, 38, 38, 0.14)",
+                border: "1px solid rgba(248, 113, 113, 0.4)",
+                color: "#fca5a5",
+                padding: "0.8rem 1rem",
+                borderRadius: "10px",
+                fontSize: "0.88rem",
+              }}
+            >
+              {resetModal.error}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <div style={{ fontSize: "0.9rem", color: "#e4e4e7" }}>
+                Enlace de recuperación de un solo uso generado para{" "}
+                <strong style={{ color: "#9ed999" }}>{resetModal.email}</strong>:
+              </div>
+
+              {resetModal.emailSent ? (
+                <div
+                  style={{
+                    background: "rgba(16, 185, 129, 0.14)",
+                    border: "1px solid rgba(52, 211, 153, 0.4)",
+                    color: "#a7f3d0",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  Correo enviado automáticamente vía SMTP. También puedes copiar el enlace abajo si prefieres compartirlo directamente.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    background: "rgba(245, 158, 11, 0.12)",
+                    border: "1px solid rgba(251, 191, 36, 0.35)",
+                    color: "#fde68a",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  {resetModal.smtpReady
+                    ? "No se pudo entregar el correo automático; comparte este enlace directamente con el usuario."
+                    : "SMTP no está configurado todavía; copia y envía este enlace al usuario (WhatsApp, Teams o correo)."}
+                </div>
+              )}
+
+              <div
+                style={{
+                  background: "#070b08",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: "8px",
+                  padding: "0.7rem 0.85rem",
+                  fontFamily: "monospace",
+                  fontSize: "0.78rem",
+                  color: "#6ee7b7",
+                  wordBreak: "break-all",
+                  userSelect: "all",
+                }}
+              >
+                {resetModal.resetUrl}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem" }}>
+                <button
+                  className="filled-button"
+                  onClick={() => handleCopyResetUrl(resetModal.resetUrl)}
+                  type="button"
+                >
+                  {copiedResetUrl ? "¡Enlace copiado!" : "Copiar enlace"}
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );

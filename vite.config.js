@@ -39,6 +39,8 @@ export default defineConfig({
         "src/js/login.jsx",
         "src/js/metrics.jsx",
         "src/js/pageNotFound.jsx",
+        "src/js/passwordRequest.jsx",
+        "src/js/passwordReset.jsx",
         "src/js/projectAdmin.jsx",
         "src/js/projectDashboard.jsx",
         "src/js/projectQaqcDashboard.jsx",

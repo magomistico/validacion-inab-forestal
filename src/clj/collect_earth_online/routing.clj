@@ -41,10 +41,12 @@
    [:get  "/institution-dashboard"]          {:handler (render-page "/institution-dashboard")}
    [:get  "/review-institution"]             {:handler (render-page "/review-institution")}
    [:get  "/login"]                          {:handler (render-page "/login")}
+   [:get  "/password-request"]               {:handler (render-page "/password-request")}
+   [:get  "/password-reset"]                 {:handler (render-page "/password-reset")}
    [:get  "/project-dashboard"]              {:handler     (render-page "/project-dashboard")
                                               :auth-type   :admin
                                               :auth-action :redirect}
-   [:get "/project-wizard"]                  {:handler (render-page "/project-wizard")
+   [:get "/project-wizard"]                  {:handler     (render-page "/project-wizard")
                                               :auth-type   :admin
                                               :auth-action :redirect}
    [:get  "/register"]                       {:handler (render-page "/register")}
@@ -94,6 +96,9 @@
                                               :auth-action :block}
    [:post "/password-request"]               {:handler users/password-request}
    [:post "/password-reset"]                 {:handler users/password-reset}
+   [:post "/admin-password-reset-link"]      {:handler     users/admin-password-reset-link
+                                              :auth-type   :admin
+                                              :auth-action :block}
    [:post "/verify-email"]                   {:handler users/verify-email}
    [:post "/register"]                       {:handler users/register}
    [:post "/confirm-data-sharing"]           {:handler #'users/confirm-data-sharing!}
