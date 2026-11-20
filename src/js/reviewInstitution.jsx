@@ -453,6 +453,7 @@ export const ReviewInstitution = ({ institutionId, userId }) => {
       )}
       {state.selectedTab === "users" && (
         <UsersTab
+          institutionId={institutionId}
           isAdmin={state.isAdmin}
           editUsersBulk={editUsersBulk}
           addUsersBulk={addUsersBulk}

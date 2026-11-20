@@ -32,6 +32,37 @@ sed -i "s/:triangulum.handler\/session-key .*/:triangulum.handler\/session-key  
 sed -i "s/:triangulum.server\/http-port .*/:triangulum.server\/http-port         $HTTP_PORT/" config.edn
 sed -i 's/:triangulum.server\/mode .*/:triangulum.server\/mode              "prod"/' config.edn
 
+# Configurar correo SMTP y URL base de forma segura (soporta caracteres especiales en contraseñas)
+python3 - <<'EOPY'
+import os, re, json
+
+with open("config.edn", "r", encoding="utf-8") as f:
+    content = f.read()
+
+smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+smtp_port = os.environ.get("SMTP_PORT", "587")
+smtp_user = os.environ.get("SMTP_USER", "")
+smtp_pass = os.environ.get("SMTP_PASS", "")
+smtp_tls = "true" if str(os.environ.get("SMTP_TLS", "true")).strip().lower() in ("true", "1", "yes") else "false"
+base_url = os.environ.get("BASE_URL", "https://inab-sig.duckdns.org").rstrip("/") + "/"
+
+replacements = {
+    ":triangulum.email/host": json.dumps(smtp_host),
+    ":triangulum.email/user": json.dumps(smtp_user),
+    ":triangulum.email/pass": json.dumps(smtp_pass),
+    ":triangulum.email/tls": smtp_tls,
+    ":triangulum.email/port": str(int(smtp_port)) if str(smtp_port).isdigit() else "587",
+    ":triangulum.email/base-url": json.dumps(base_url),
+}
+
+for key, value in replacements.items():
+    pattern = re.compile(rf"({re.escape(key)}\s+)[^\n]+")
+    content = pattern.sub(lambda m, v=value: m.group(1) + v, content, count=1)
+
+with open("config.edn", "w", encoding="utf-8") as f:
+    f.write(content)
+EOPY
+
 # 2. Esperar disponibilidad de PostgreSQL
 echo "[INFO] Esperando a PostgreSQL en $DB_HOST:$DB_PORT..."
 until PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null || PGPASSWORD="$DB_ADMIN_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "postgres" -c '\q' 2>/dev/null; do

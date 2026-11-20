@@ -283,7 +283,7 @@ CREATE OR REPLACE FUNCTION set_password_reset_key(_email text, _reset_key text)
 
     UPDATE users
     SET reset_key = _reset_key
-    WHERE email = _email
+    WHERE LOWER(TRIM(email)) = LOWER(TRIM(_email))
     RETURNING email
 
 $$ LANGUAGE SQL;

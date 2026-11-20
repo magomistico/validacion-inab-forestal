@@ -36,6 +36,12 @@ services:
       PORT: 8080
       SESSION_KEY: inabsigvalidacio
       EE_PROJECT: ${EE_PROJECT:-}
+      BASE_URL: ${BASE_URL:-https://inab-sig.duckdns.org}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_TLS: ${SMTP_TLS:-true}
     ports:
       - "8080:8080"
     volumes:
